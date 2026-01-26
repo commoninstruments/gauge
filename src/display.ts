@@ -145,13 +145,16 @@ export function displayUsageTable(accounts: AccountUsage[]): void {
     head: [
       chalk.bold("Account"),
       chalk.bold("Plan"),
+      chalk.bold("5hr Session"),
+      chalk.bold("Weekly All"),
+      chalk.bold("Weekly Sonnet"),
       chalk.bold("Next Use"),
     ],
     style: {
       head: [],
       border: [],
     },
-    colWidths: [14, 6, 26],
+    colWidths: [14, 6, 18, 18, 18, 20],
   });
 
   for (const account of accounts) {
@@ -162,10 +165,14 @@ export function displayUsageTable(accounts: AccountUsage[]): void {
       table.push([
         chalk.yellow(account.name),
         chalk.gray("?"),
-        chalk.red(nextUseLabel),
+        { colSpan: 4, content: chalk.red(nextUseLabel) },
       ]);
       continue;
     }
+
+    const [session, sessionReset] = formatUsageCell(account.usage.five_hour);
+    const [weekly, weeklyReset] = formatUsageCell(account.usage.seven_day);
+    const [sonnet, sonnetReset] = formatUsageCell(account.usage.seven_day_sonnet);
 
     const planBadge =
       account.plan === "max" ? chalk.magenta("Max") : chalk.cyan("Pro");
@@ -175,7 +182,11 @@ export function displayUsageTable(accounts: AccountUsage[]): void {
         ? chalk.green(nextUseLabel)
         : chalk.yellow(nextUseLabel);
 
-    table.push([account.name, planBadge, nextUseCell]);
+    // First row: usage bars + next use
+    table.push([account.name, planBadge, session, weekly, sonnet, nextUseCell]);
+
+    // Second row: reset times
+    table.push(["", "", sessionReset, weeklyReset, sonnetReset, ""]);
   }
 
   console.log(table.toString());

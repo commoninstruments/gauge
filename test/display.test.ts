@@ -37,7 +37,7 @@ function buildUsage(
   };
 }
 
-test("displayUsageTable shows next use or wait time", () => {
+test("displayUsageTable shows usage columns and next use", () => {
   const now = new Date();
   const inThirtyMinutes = new Date(now.getTime() + 30 * 60 * 1000).toISOString();
   const inTwoDays = new Date(now.getTime() + 2 * 24 * 60 * 60 * 1000).toISOString();
@@ -65,6 +65,9 @@ test("displayUsageTable shows next use or wait time", () => {
 
   const output = stripAnsi(captureOutput(() => displayUsageTable(accounts)));
 
+  assert.match(output, /5hr Session/);
+  assert.match(output, /Weekly All/);
+  assert.match(output, /Weekly Sonnet/);
   assert.match(output, /Next Use/);
   assert.match(output, /Use now/);
   assert.match(output, /Wait/);

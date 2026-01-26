@@ -10,9 +10,9 @@ function readJson(filePath: string): any {
   return JSON.parse(fs.readFileSync(filePath, "utf-8"));
 }
 
-test("package.json uses claudestatus name and bin", () => {
+test("package.json uses scoped claudestatus name and bin", () => {
   const pkg = readJson(path.join(root, "package.json"));
-  assert.equal(pkg.name, "claudestatus");
+  assert.equal(pkg.name, "@howells/claudestatus");
   assert.ok(pkg.bin && pkg.bin.claudestatus);
 });
 

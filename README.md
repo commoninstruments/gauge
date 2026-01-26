@@ -14,10 +14,10 @@ CLI to check Claude usage across multiple accounts.
 ## Usage
 ```bash
 # One-off (after publish)
-npx claudestatus@latest
+npx @howells/claudestatus@latest
 
 # Or install globally
-npm install -g claudestatus
+npm install -g @howells/claudestatus
 claudestatus
 
 # Add an account (opens Chrome for login)

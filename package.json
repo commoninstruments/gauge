@@ -1,5 +1,5 @@
 {
-  "name": "claudestatus",
+  "name": "@howells/claudestatus",
   "version": "1.0.0",
   "description": "CLI to check Claude usage across multiple accounts",
   "license": "MIT",

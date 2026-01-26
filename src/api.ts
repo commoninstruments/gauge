@@ -80,7 +80,7 @@ export async function fetchUsageForAccount(name: string): Promise<AccountUsage> 
       plan: "unknown",
       orgUuid: "",
       usage: {} as UsageResponse,
-      error: "No saved session. Run: claudeusage add " + name,
+      error: "No saved session. Run: claudestatus add " + name,
     };
   }
 
@@ -116,7 +116,7 @@ export async function fetchUsageForAccount(name: string): Promise<AccountUsage> 
       content.includes("challenge-platform") ||
       content.includes("cf-turnstile")
     ) {
-      throw new Error("Cloudflare block - run: claudeusage refresh " + name);
+      throw new Error("Cloudflare block - run: claudestatus refresh " + name);
     }
 
     const orgs = await fetchOrganizationsFromPage(page);
@@ -155,7 +155,7 @@ export async function fetchUsageForAccount(name: string): Promise<AccountUsage> 
         plan: "unknown",
         orgUuid: "",
         usage: {} as UsageResponse,
-        error: "Session expired. Run: claudeusage refresh " + name,
+        error: "Session expired. Run: claudestatus refresh " + name,
       };
     }
 
@@ -264,7 +264,7 @@ async function fetchUsageViaRequest(
         plan: "unknown",
         orgUuid: "",
         usage: {} as UsageResponse,
-        error: "Session expired. Run: claudeusage refresh " + name,
+        error: "Session expired. Run: claudestatus refresh " + name,
       };
     }
 
@@ -278,7 +278,7 @@ async function fetchUsageViaRequest(
         plan: "unknown",
         orgUuid: "",
         usage: {} as UsageResponse,
-        error: "Session expired. Run: claudeusage refresh " + name,
+        error: "Session expired. Run: claudestatus refresh " + name,
       };
     }
 
@@ -311,7 +311,7 @@ async function fetchUsageViaRequest(
         plan: "unknown",
         orgUuid: "",
         usage: {} as UsageResponse,
-        error: "Session expired. Run: claudeusage refresh " + name,
+        error: "Session expired. Run: claudestatus refresh " + name,
       };
     }
 
@@ -325,7 +325,7 @@ async function fetchUsageViaRequest(
         plan: "unknown",
         orgUuid: "",
         usage: {} as UsageResponse,
-        error: "Session expired. Run: claudeusage refresh " + name,
+        error: "Session expired. Run: claudestatus refresh " + name,
       };
     }
 
@@ -351,7 +351,7 @@ async function fetchUsageViaRequest(
         plan: "unknown",
         orgUuid: "",
         usage: {} as UsageResponse,
-        error: "Session expired. Run: claudeusage refresh " + name,
+        error: "Session expired. Run: claudestatus refresh " + name,
       };
     }
     return null;

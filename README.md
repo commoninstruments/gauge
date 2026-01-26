@@ -1,4 +1,4 @@
-# Claude Usage Dashboard
+# Claude Status Dashboard
 
 CLI to check Claude usage across multiple accounts.
 
@@ -11,32 +11,29 @@ CLI to check Claude usage across multiple accounts.
 - Node.js 18+
 - Chrome installed (Playwright uses your local Chrome)
 
-## Install
-```bash
-npm install
-```
-
-## Build
-```bash
-npm run build
-```
-
 ## Usage
 ```bash
+# One-off (after publish)
+npx claudestatus@latest
+
+# Or install globally
+npm install -g claudestatus
+claudestatus
+
 # Add an account (opens Chrome for login)
-node dist/cli.js add <name>
+claudestatus add <name>
 
 # Refresh an account session
-node dist/cli.js refresh <name>
+claudestatus refresh <name>
 
 # List accounts
-node dist/cli.js list
+claudestatus list
 
 # Show dashboard
-node dist/cli.js
+claudestatus
 
 # Quick recommendation only
-node dist/cli.js --quick
+claudestatus --quick
 ```
 
 ## Notes

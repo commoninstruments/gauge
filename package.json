@@ -1,5 +1,5 @@
 {
-  "name": "claudeusage",
+  "name": "claudestatus",
   "version": "1.0.0",
   "description": "CLI to check Claude usage across multiple accounts",
   "license": "MIT",
@@ -9,7 +9,7 @@
   },
   "type": "module",
   "bin": {
-    "claudeusage": "./dist/cli.js"
+    "claudestatus": "./dist/cli.js"
   },
   "scripts": {
     "build": "tsc",

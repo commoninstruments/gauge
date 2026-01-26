@@ -197,7 +197,7 @@ export function displayUsageTable(accounts: AccountUsage[]): void {
 export function displayQuickRecommendation(accounts: AccountUsage[]): void {
   const next = pickNextAccount(accounts);
   if (!next) {
-    console.log(chalk.red("No accounts available. Run: claudeusage add <name>"));
+    console.log(chalk.red("No accounts available. Run: claudestatus add <name>"));
     return;
   }
 

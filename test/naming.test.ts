@@ -22,3 +22,18 @@ test("CLI help text references claudestatus", () => {
   assert.match(cliSource, /\.name\("claudestatus"\)/);
   assert.match(cliSource, /claudestatus add/);
 });
+
+test("package ships dist and builds before publish", () => {
+  const pkg = readJson(path.join(root, "package.json"));
+  assert.ok(Array.isArray(pkg.files));
+  assert.ok(pkg.files.includes("dist"));
+  assert.ok(pkg.files.includes("README.md"));
+  assert.ok(pkg.files.includes("LICENSE"));
+  assert.ok(pkg.files.includes("package.json"));
+  assert.equal(pkg.scripts?.prepublishOnly, "npm run build");
+});
+
+test("tsconfig preserves shebang for CLI", () => {
+  const tsconfig = readJson(path.join(root, "tsconfig.json"));
+  assert.equal(tsconfig.compilerOptions?.preserveShebang, true);
+});

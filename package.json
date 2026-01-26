@@ -1,11 +1,11 @@
 {
   "name": "@howells/claudestatus",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "CLI to check Claude usage across multiple accounts",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git@github.com:howells/claudestatus.git"
+    "url": "git+ssh://git@github.com/howells/claudestatus.git"
   },
   "type": "module",
   "bin": {
@@ -18,7 +18,7 @@
     "package.json"
   ],
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && node scripts/insert-shebang.js",
     "dev": "tsx src/cli.ts",
     "start": "node dist/cli.js",
     "test": "tsx --test test/**/*.test.ts",
@@ -33,6 +33,6 @@
   "devDependencies": {
     "@types/node": "^22.10.0",
     "tsx": "^4.19.0",
-    "typescript": "^5.7.0"
+    "typescript": "^5.9.3"
   }
 }

@@ -33,7 +33,8 @@ test("package ships dist and builds before publish", () => {
   assert.equal(pkg.scripts?.prepublishOnly, "npm run build");
 });
 
-test("tsconfig preserves shebang for CLI", () => {
-  const tsconfig = readJson(path.join(root, "tsconfig.json"));
-  assert.equal(tsconfig.compilerOptions?.preserveShebang, true);
+test("src CLI begins with shebang", () => {
+  const cliSource = fs.readFileSync(path.join(root, "src", "cli.ts"), "utf-8");
+  const firstLine = cliSource.split("\n")[0];
+  assert.equal(firstLine, "#!/usr/bin/env node");
 });

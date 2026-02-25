@@ -5,7 +5,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+ssh://git@github.com/howells/claudestatus.git"
+    "url": "git+ssh://git@github.com/howells/claudeusage.git"
   },
   "type": "module",
   "bin": {

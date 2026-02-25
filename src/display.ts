@@ -215,7 +215,7 @@ function formatAccountCard(
 
   if (account.error) {
     const errorMsg = account.error.includes("expired")
-      ? `Session expired — run: claudestatus refresh ${account.name}`
+      ? `Session expired — run: claudeusage refresh ${account.name}`
       : account.error;
     lines.push(`    ${chalk.red(errorMsg)}`);
   } else {
@@ -340,7 +340,7 @@ export function displayQuickRecommendation(accounts: AccountUsage[]): void {
   const next = pickNextAccount(accounts);
   if (!next) {
     console.log(
-      chalk.red("No accounts available. Run: claudestatus add <name>")
+      chalk.red("No accounts available. Run: claudeusage add <name>")
     );
     return;
   }

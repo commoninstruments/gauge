@@ -114,7 +114,7 @@ export async function fetchUsageForAccount(
       plan: "unknown",
       orgUuid: "",
       usage: {} as UsageResponse,
-      error: `No saved session. Run: claudestatus add ${name}`,
+      error: `No saved session. Run: claudeusage add ${name}`,
     };
   }
 
@@ -152,7 +152,7 @@ export async function fetchUsageForAccount(
       content.includes("challenge-platform") ||
       content.includes("cf-turnstile")
     ) {
-      throw new Error(`Cloudflare block - run: claudestatus refresh ${name}`);
+      throw new Error(`Cloudflare block - run: claudeusage refresh ${name}`);
     }
 
     const orgs = await fetchOrganizationsFromPage(page);
@@ -187,7 +187,7 @@ export async function fetchUsageForAccount(
         plan: "unknown",
         orgUuid: "",
         usage: {} as UsageResponse,
-        error: `Session expired. Run: claudestatus refresh ${name}`,
+        error: `Session expired. Run: claudeusage refresh ${name}`,
       };
     }
 
@@ -291,7 +291,7 @@ function expiredError(name: string): AccountUsage {
     plan: "unknown",
     orgUuid: "",
     usage: {} as UsageResponse,
-    error: `Session expired. Run: claudestatus refresh ${name}`,
+    error: `Session expired. Run: claudeusage refresh ${name}`,
   };
 }
 
@@ -371,7 +371,7 @@ async function fetchUsageViaRequest(
         plan: "unknown",
         orgUuid: "",
         usage: {} as UsageResponse,
-        error: `Session expired. Run: claudestatus refresh ${name}`,
+        error: `Session expired. Run: claudeusage refresh ${name}`,
       };
     }
     return null;

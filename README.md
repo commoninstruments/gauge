@@ -14,30 +14,30 @@ CLI to check Claude usage across multiple accounts.
 ## Usage
 ```bash
 # One-off (after publish)
-npx @howells/claudestatus@latest
+npx @howells/claudeusage@latest
 
 # Or install globally
-npm install -g @howells/claudestatus
-claudestatus
+npm install -g @howells/claudeusage
+claudeusage
 
 # Add an account (opens Chrome for login)
-claudestatus add <name>
+claudeusage add <name>
 
 # Refresh an account session
-claudestatus refresh <name>
+claudeusage refresh <name>
 
 # List accounts
-claudestatus list
+claudeusage list
 
 # Show dashboard
-claudestatus
+claudeusage
 
 # Quick recommendation only
-claudestatus --quick
+claudeusage --quick
 ```
 
 ## Notes
-- Account data is stored in `~/.claudestatus/` (persists across reinstalls).
+- Account data is stored in `~/.claudeusage/` (persists across reinstalls).
 - Uses `playwright-core` — no bundled browser download; requires Chrome installed on your system.
 - If Cloudflare blocks a session, re-run `refresh` for that account.
 

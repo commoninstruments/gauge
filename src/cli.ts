@@ -13,11 +13,11 @@ import { displayQuickRecommendation, displayUsageTable } from "./display.js";
 import { migrateIfNeeded } from "./migrate.js";
 
 if (migrateIfNeeded()) {
-  console.log(chalk.gray("Migrated account data to ~/.claudestatus/"));
+  console.log(chalk.gray("Migrated account data to ~/.claudeusage/"));
 }
 
 program
-  .name("claudestatus")
+  .name("claudeusage")
   .description("Check Claude usage across multiple accounts")
   .version("1.0.0");
 
@@ -29,7 +29,7 @@ program
 
     if (accounts.length === 0) {
       console.log(chalk.yellow("\nNo accounts configured."));
-      console.log(`Add one with: ${chalk.cyan("claudestatus add <name>")}`);
+      console.log(`Add one with: ${chalk.cyan("claudeusage add <name>")}`);
       console.log();
       return;
     }
@@ -58,7 +58,7 @@ program
       console.log(chalk.yellow(`\nAccount "${name}" already exists.`));
       console.log(
         "Use " +
-          chalk.cyan(`claudestatus refresh ${name}`) +
+          chalk.cyan(`claudeusage refresh ${name}`) +
           " to re-authenticate."
       );
       return;
@@ -92,7 +92,7 @@ program
   .action(async (name: string) => {
     if (!accountExists(name)) {
       console.log(chalk.yellow(`\nAccount "${name}" not found.`));
-      console.log(`Use ${chalk.cyan(`claudestatus add ${name}`)} to add it.`);
+      console.log(`Use ${chalk.cyan(`claudeusage add ${name}`)} to add it.`);
       return;
     }
 
@@ -113,7 +113,7 @@ program
 
     if (accounts.length === 0) {
       console.log(chalk.yellow("\nNo accounts configured."));
-      console.log(`Add one with: ${chalk.cyan("claudestatus add <name>")}`);
+      console.log(`Add one with: ${chalk.cyan("claudeusage add <name>")}`);
       return;
     }
 

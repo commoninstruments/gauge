@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-const DATA_DIR = path.join(os.homedir(), ".claudestatus");
+const DATA_DIR = path.join(os.homedir(), ".claudeusage");
 
 export function getDataDir(): string {
   return DATA_DIR;

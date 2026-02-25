@@ -9,12 +9,12 @@ import {
   getStorageStatePath,
 } from "../src/paths.js";
 
-const expectedDir = path.join(os.homedir(), ".claudestatus");
+const expectedDir = path.join(os.homedir(), ".claudeusage");
 const RE_DIRNAME = /__dirname/;
 const RE_DIST = /\/dist\//;
 const RE_NODE_MODULES = /node_modules/;
 
-test("getDataDir returns ~/.claudestatus", () => {
+test("getDataDir returns ~/.claudeusage", () => {
   assert.equal(getDataDir(), expectedDir);
 });
 

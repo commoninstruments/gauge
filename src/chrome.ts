@@ -46,7 +46,7 @@ export function assertChromeInstalled(): void {
     console.error(
       "Chrome is required but was not found.\n\n" +
         "Install Google Chrome from: https://www.google.com/chrome/\n" +
-        "claudestatus uses your system Chrome via Playwright — no bundled browser is included."
+        "claudeusage uses your system Chrome via Playwright — no bundled browser is included."
     );
     process.exit(1);
   }

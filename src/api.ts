@@ -6,7 +6,7 @@ import {
   request,
 } from "playwright-core";
 import { assertChromeInstalled } from "./chrome.js";
-import { getProfileDir, getStorageStatePath } from "./paths.js";
+import { getProfileDir, getStorageStatePath, lockFile } from "./paths.js";
 import type {
   AccountUsage,
   Organization,
@@ -94,9 +94,9 @@ export async function addAccount(name: string): Promise<boolean> {
     return false;
   }
 
-  // Save storage state (cookies, localStorage)
   const storagePath = getStorageStatePath(name);
   await context.storageState({ path: storagePath });
+  lockFile(storagePath);
 
   await context.close();
   return true;
@@ -165,8 +165,8 @@ export async function fetchUsageForAccount(
 
     const usageResponse = await fetchUsageFromPage(page, org.uuid);
 
-    // Update storage state
     await context.storageState({ path: storagePath });
+    lockFile(storagePath);
 
     await context.close();
 
@@ -180,15 +180,8 @@ export async function fetchUsageForAccount(
     await context.close();
     const message = error instanceof Error ? error.message : String(error);
 
-    // Check if it's an auth error
     if (message.includes("401") || message.includes("403")) {
-      return {
-        name,
-        plan: "unknown",
-        orgUuid: "",
-        usage: {} as UsageResponse,
-        error: `Session expired. Run: claudeusage refresh ${name}`,
-      };
+      return expiredError(name);
     }
 
     return {
@@ -356,6 +349,7 @@ async function fetchUsageViaRequest(
     const usage = (await usageRes.json()) as UsageResponse;
 
     await api.storageState({ path: storagePath });
+    lockFile(storagePath);
 
     return {
       name,
@@ -366,13 +360,7 @@ async function fetchUsageViaRequest(
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     if (message.includes("401")) {
-      return {
-        name,
-        plan: "unknown",
-        orgUuid: "",
-        usage: {} as UsageResponse,
-        error: `Session expired. Run: claudeusage refresh ${name}`,
-      };
+      return expiredError(name);
     }
     return null;
   } finally {

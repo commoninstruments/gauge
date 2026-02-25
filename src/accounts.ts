@@ -1,10 +1,12 @@
 import fs from "node:fs";
+import path from "node:path";
 import {
   ensureDataDir,
   getAccountPath,
   getDataDir,
   getProfileDir,
   getStorageStatePath,
+  lockFile,
 } from "./paths.js";
 import type { AccountConfig } from "./types.js";
 
@@ -15,7 +17,7 @@ export function listAccounts(): AccountConfig[] {
   return files
     .filter((f) => f.endsWith(".json") && !f.includes("-storage"))
     .map((f) => {
-      const content = fs.readFileSync(`${dir}/${f}`, "utf-8");
+      const content = fs.readFileSync(path.join(dir, f), "utf-8");
       return JSON.parse(content) as AccountConfig;
     });
 }
@@ -30,7 +32,9 @@ export function saveAccount(name: string): void {
     name,
     addedAt: new Date().toISOString(),
   };
-  fs.writeFileSync(getAccountPath(name), JSON.stringify(config, null, 2));
+  const accountPath = getAccountPath(name);
+  fs.writeFileSync(accountPath, JSON.stringify(config, null, 2));
+  lockFile(accountPath);
 }
 
 export function removeAccount(name: string): boolean {

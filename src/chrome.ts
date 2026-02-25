@@ -1,4 +1,3 @@
-import { execSync } from "node:child_process";
 import fs from "node:fs";
 
 const CHROME_PATHS: Record<string, string[]> = {
@@ -25,19 +24,6 @@ export function findChrome(): string | null {
       return p;
     }
   }
-
-  try {
-    const result = execSync("which google-chrome || which chromium", {
-      encoding: "utf-8",
-      stdio: ["pipe", "pipe", "pipe"],
-    }).trim();
-    if (result) {
-      return result;
-    }
-  } catch {
-    // not found via which
-  }
-
   return null;
 }
 

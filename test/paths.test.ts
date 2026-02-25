@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 import {
+  assertSafeName,
   getAccountPath,
   getDataDir,
   getProfileDir,
@@ -34,6 +35,29 @@ test("getProfileDir returns dir inside data dir", () => {
   const result = getProfileDir("test");
   assert.ok(result.startsWith(expectedDir));
   assert.ok(result.includes("profile-test"));
+});
+
+test("rejects path traversal in account names", () => {
+  const bad = [
+    "../evil",
+    "../../.ssh/keys",
+    "foo/bar",
+    "/absolute",
+    "a b c",
+    "",
+  ];
+  for (const name of bad) {
+    assert.throws(() => getAccountPath(name), /invalid characters/);
+    assert.throws(() => getStorageStatePath(name), /invalid characters/);
+    assert.throws(() => getProfileDir(name), /invalid characters/);
+  }
+});
+
+test("accepts valid account names", () => {
+  const good = ["personal", "work-2", "my_account", "ABC123"];
+  for (const name of good) {
+    assert.doesNotThrow(() => assertSafeName(name));
+  }
 });
 
 test("no paths contain __dirname, dist, or node_modules", () => {

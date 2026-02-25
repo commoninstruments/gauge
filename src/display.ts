@@ -1,59 +1,54 @@
 import chalk from "chalk";
-import Table from "cli-table3";
 import type { AccountUsage, UsageLimit } from "./types.js";
+
+const ANSI_RE = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "g");
 
 function formatResetTime(isoString: string): string {
   const date = new Date(isoString);
   const now = new Date();
   const diffMs = date.getTime() - now.getTime();
 
-  if (diffMs < 0) return "now";
+  if (diffMs < 0) {
+    return "now";
+  }
 
-  const diffMins = Math.floor(diffMs / 60000);
+  const diffMins = Math.floor(diffMs / 60_000);
   const diffHours = Math.floor(diffMins / 60);
-  const diffDays = Math.floor(diffHours / 24);
 
   if (diffMins < 60) {
     return `${diffMins}m`;
-  } else if (diffHours < 24) {
+  }
+  if (diffHours < 24) {
     const mins = diffMins % 60;
     return mins > 0 ? `${diffHours}h ${mins}m` : `${diffHours}h`;
-  } else {
-    const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-    const hours = date.getHours();
-    const ampm = hours >= 12 ? "pm" : "am";
-    const hour12 = hours % 12 || 12;
-    return `${days[date.getDay()]} ${hour12}${ampm}`;
   }
+  const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const hours = date.getHours();
+  const ampm = hours >= 12 ? "pm" : "am";
+  const hour12 = hours % 12 || 12;
+  return `${days[date.getDay()]} ${hour12}${ampm}`;
 }
 
-function usageBar(percent: number, width = 10): string {
+function usageBar(percent: number, width = 35): string {
   const filled = Math.round((percent / 100) * width);
   const empty = width - filled;
 
   let color = chalk.green;
-  if (percent >= 90) color = chalk.red;
-  else if (percent >= 70) color = chalk.yellow;
+  if (percent >= 90) {
+    color = chalk.red;
+  } else if (percent >= 70) {
+    color = chalk.yellow;
+  }
 
   return color("█".repeat(filled)) + chalk.gray("░".repeat(empty));
 }
 
-function formatUsageCell(limit: UsageLimit | null): string[] {
-  if (!limit) return [chalk.gray("—"), ""];
-
-  const bar = usageBar(limit.utilization);
-  const pct = limit.utilization.toString().padStart(2) + "%";
-  const reset = chalk.gray("↻ " + formatResetTime(limit.resets_at));
-
-  return [`${bar} ${pct}`, reset];
-}
-
-type Availability = {
+interface Availability {
   status: "available" | "wait" | "error";
   waitLabel: string;
   waitMs: number;
   reason: "weekly" | "session" | "none";
-};
+}
 
 function getAvailability(account: AccountUsage): Availability {
   if (account.error) {
@@ -69,7 +64,10 @@ function getAvailability(account: AccountUsage): Availability {
   const session = account.usage.five_hour;
 
   if (weekly && weekly.utilization >= 100) {
-    const waitMs = Math.max(0, new Date(weekly.resets_at).getTime() - Date.now());
+    const waitMs = Math.max(
+      0,
+      new Date(weekly.resets_at).getTime() - Date.now()
+    );
     return {
       status: waitMs <= 0 ? "available" : "wait",
       waitLabel: formatResetTime(weekly.resets_at),
@@ -79,7 +77,10 @@ function getAvailability(account: AccountUsage): Availability {
   }
 
   if (session && session.utilization >= 100) {
-    const waitMs = Math.max(0, new Date(session.resets_at).getTime() - Date.now());
+    const waitMs = Math.max(
+      0,
+      new Date(session.resets_at).getTime() - Date.now()
+    );
     return {
       status: waitMs <= 0 ? "available" : "wait",
       waitLabel: formatResetTime(session.resets_at),
@@ -108,12 +109,164 @@ function formatNextUseLabel(availability: Availability): string {
   return `Wait ${availability.waitLabel}`;
 }
 
+const METRIC_LABELS: Record<string, string> = {
+  five_hour: "5hr",
+  seven_day: "Weekly",
+  seven_day_sonnet: "Sonnet",
+  seven_day_opus: "Opus",
+  seven_day_cowork: "Cowork",
+  seven_day_oauth_apps: "OAuth",
+};
+
+const METRIC_KEYS = Object.keys(METRIC_LABELS) as Array<
+  keyof typeof METRIC_LABELS
+>;
+
+interface ActiveMetric {
+  label: string;
+  limit: UsageLimit;
+}
+
+function getActiveMetrics(usage: AccountUsage["usage"]): ActiveMetric[] {
+  const metrics: ActiveMetric[] = [];
+  for (const key of METRIC_KEYS) {
+    const limit = usage[key as keyof typeof usage];
+    if (limit && typeof limit === "object" && "utilization" in limit) {
+      metrics.push({ label: METRIC_LABELS[key], limit: limit as UsageLimit });
+    }
+  }
+  return metrics;
+}
+
+function formatMetricRow(label: string, limit: UsageLimit): string {
+  const bar = usageBar(limit.utilization);
+  const pct = `${limit.utilization}%`.padStart(4);
+  const reset = chalk.gray(`↻ ${formatResetTime(limit.resets_at)}`);
+  return `    ${label.padEnd(9)}${bar}  ${pct}  ${reset}`;
+}
+
+function statusIcon(availability: Availability): string {
+  switch (availability.status) {
+    case "available":
+      return chalk.green("●");
+    case "wait":
+      return chalk.yellow("▲");
+    case "error":
+      return chalk.red("✗");
+    default:
+      return "?";
+  }
+}
+
+function planBadge(plan: AccountUsage["plan"]): string {
+  if (plan === "max_20x") {
+    return chalk.magenta("Max 20x");
+  }
+  if (plan === "max_5x") {
+    return chalk.magenta("Max 5x");
+  }
+  if (plan === "max") {
+    return chalk.magenta("Max");
+  }
+  if (plan === "pro") {
+    return chalk.cyan("Pro");
+  }
+  return chalk.gray("?");
+}
+
+function availabilityBadge(availability: Availability): string {
+  if (availability.status === "available") {
+    return chalk.green("Use now");
+  }
+  if (availability.status === "error") {
+    return chalk.red("Error");
+  }
+  if (availability.reason === "weekly") {
+    return chalk.yellow(`Wait until ${availability.waitLabel}`);
+  }
+  return chalk.yellow(`Wait ${availability.waitLabel}`);
+}
+
+const CARD_WIDTH = 56;
+const SEPARATOR = "╌".repeat(CARD_WIDTH);
+
+function formatAccountCard(
+  account: AccountUsage,
+  availability: Availability
+): string {
+  const lines: string[] = [];
+
+  const icon = statusIcon(availability);
+  const badge = planBadge(account.plan);
+  const avail = availabilityBadge(availability);
+  const headerRight = `${badge} · ${avail}`;
+
+  // Build header: icon + name on left, plan + availability on right
+  // We strip ANSI for length calculation to align properly
+  const stripAnsi = (s: string) => s.replace(ANSI_RE, "");
+  const nameStr = `  ${icon} ${chalk.bold(account.name)}`;
+  const nameLen = stripAnsi(nameStr).length;
+  const rightLen = stripAnsi(headerRight).length;
+  const gap = Math.max(1, CARD_WIDTH + 2 - nameLen - rightLen);
+  lines.push(`${nameStr}${" ".repeat(gap)}${headerRight}`);
+
+  // Separator
+  lines.push(`  ${chalk.gray(SEPARATOR)}`);
+
+  if (account.error) {
+    const errorMsg = account.error.includes("expired")
+      ? `Session expired — run: claudestatus refresh ${account.name}`
+      : account.error;
+    lines.push(`    ${chalk.red(errorMsg)}`);
+  } else {
+    const metrics = getActiveMetrics(account.usage);
+    for (const { label, limit } of metrics) {
+      lines.push(formatMetricRow(label, limit));
+    }
+  }
+
+  return lines.join("\n");
+}
+
+interface ScoredAccount {
+  account: AccountUsage;
+  availability: Availability;
+  score: number;
+}
+
+function sortByRecommendation(accounts: AccountUsage[]): ScoredAccount[] {
+  const scored: ScoredAccount[] = accounts.map((account) => {
+    const availability = getAvailability(account);
+    const score =
+      (account.usage.five_hour?.utilization ?? 0) +
+      (account.usage.seven_day?.utilization ?? 0);
+    return { account, availability, score };
+  });
+
+  return scored.sort((a, b) => {
+    const order = { available: 0, wait: 1, error: 2 };
+    const statusDiff =
+      order[a.availability.status] - order[b.availability.status];
+    if (statusDiff !== 0) {
+      return statusDiff;
+    }
+
+    if (a.availability.status === "wait" && b.availability.status === "wait") {
+      return a.availability.waitMs - b.availability.waitMs;
+    }
+
+    return a.score - b.score;
+  });
+}
+
 function pickNextAccount(accounts: AccountUsage[]): {
   account: AccountUsage;
   availability: Availability;
 } | null {
   const available = accounts.filter((a) => !a.error);
-  if (available.length === 0) return null;
+  if (available.length === 0) {
+    return null;
+  }
 
   const scored = available.map((account) => ({
     account,
@@ -123,7 +276,9 @@ function pickNextAccount(accounts: AccountUsage[]): {
       (account.usage.seven_day?.utilization ?? 0),
   }));
 
-  const usable = scored.filter((entry) => entry.availability.status === "available");
+  const usable = scored.filter(
+    (entry) => entry.availability.status === "available"
+  );
   if (usable.length > 0) {
     return usable.reduce((a, b) => (a.score <= b.score ? a : b));
   }
@@ -137,78 +292,56 @@ function pickNextAccount(accounts: AccountUsage[]): {
 }
 
 export function displayUsageTable(accounts: AccountUsage[]): void {
+  const sorted = sortByRecommendation(accounts);
+
+  // Fleet summary
+  const total = accounts.length;
+  const availableCount = sorted.filter(
+    (s) => s.availability.status === "available"
+  ).length;
+  const nonError = sorted.filter((s) => s.availability.status !== "error");
+  const avgLoad =
+    nonError.length > 0
+      ? Math.round(
+          nonError.reduce((sum, s) => sum + s.score / 2, 0) / nonError.length
+        )
+      : 0;
+
   console.log();
   console.log(chalk.bold("  Claude Usage Dashboard"));
-  console.log();
+  console.log(
+    chalk.gray(
+      `  ${total} account${total !== 1 ? "s" : ""} · ${availableCount} available · ${avgLoad}% avg load`
+    )
+  );
 
-  const table = new Table({
-    head: [
-      chalk.bold("Account"),
-      chalk.bold("Plan"),
-      chalk.bold("5hr Session"),
-      chalk.bold("Weekly All"),
-      chalk.bold("Weekly Sonnet"),
-      chalk.bold("Next Use"),
-    ],
-    style: {
-      head: [],
-      border: [],
-    },
-    colWidths: [14, 6, 18, 18, 18, 20],
-  });
-
-  for (const account of accounts) {
-    const availability = getAvailability(account);
-    const nextUseLabel = formatNextUseLabel(availability);
-
-    if (account.error) {
-      table.push([
-        chalk.yellow(account.name),
-        chalk.gray("?"),
-        { colSpan: 4, content: chalk.red(nextUseLabel) },
-      ]);
-      continue;
-    }
-
-    const [session, sessionReset] = formatUsageCell(account.usage.five_hour);
-    const [weekly, weeklyReset] = formatUsageCell(account.usage.seven_day);
-    const [sonnet, sonnetReset] = formatUsageCell(account.usage.seven_day_sonnet);
-
-    const planBadge =
-      account.plan === "max" ? chalk.magenta("Max") : chalk.cyan("Pro");
-
-    const nextUseCell =
-      availability.status === "available"
-        ? chalk.green(nextUseLabel)
-        : chalk.yellow(nextUseLabel);
-
-    // First row: usage bars + next use
-    table.push([account.name, planBadge, session, weekly, sonnet, nextUseCell]);
-
-    // Second row: reset times
-    table.push(["", "", sessionReset, weeklyReset, sonnetReset, ""]);
+  // Account cards
+  for (const { account, availability } of sorted) {
+    console.log();
+    console.log(formatAccountCard(account, availability));
   }
 
-  console.log(table.toString());
+  // Footer separator + recommendation
   console.log();
+  console.log(`  ${chalk.gray("─".repeat(CARD_WIDTH + 1))}`);
 
-  // Recommendation
   const next = pickNextAccount(accounts);
   if (next) {
-    const nextUseLabel = formatNextUseLabel(next.availability);
+    const label = formatNextUseLabel(next.availability);
     console.log(
-      chalk.cyan("  💡 Recommendation: ") +
-        chalk.bold(next.account.name) +
-        chalk.gray(` (${nextUseLabel})`)
+      `  ${chalk.cyan("→")} Best: ${chalk.bold(next.account.name)} ${chalk.gray(`(${label})`)}`
     );
-    console.log();
   }
+
+  console.log();
 }
 
 export function displayQuickRecommendation(accounts: AccountUsage[]): void {
   const next = pickNextAccount(accounts);
   if (!next) {
-    console.log(chalk.red("No accounts available. Run: claudestatus add <name>"));
+    console.log(
+      chalk.red("No accounts available. Run: claudestatus add <name>")
+    );
     return;
   }
 

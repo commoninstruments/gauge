@@ -5,7 +5,7 @@ const shebang = "#!/usr/bin/env node";
 const distPath = path.resolve("dist", "cli.js");
 const srcPath = path.resolve("src", "cli.ts");
 
-if (!fs.existsSync(distPath) || !fs.existsSync(srcPath)) {
+if (!(fs.existsSync(distPath) && fs.existsSync(srcPath))) {
   process.exit(0);
 }
 

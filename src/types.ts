@@ -19,6 +19,7 @@ export interface Organization {
   uuid: string;
   name: string;
   capabilities: string[];
+  rate_limit_tier: string | null;
 }
 
 export interface AccountConfig {
@@ -26,9 +27,11 @@ export interface AccountConfig {
   addedAt: string;
 }
 
+export type Plan = "pro" | "max_5x" | "max_20x" | "max" | "unknown";
+
 export interface AccountUsage {
   name: string;
-  plan: "pro" | "max" | "unknown";
+  plan: Plan;
   orgUuid: string;
   usage: UsageResponse;
   error?: string;

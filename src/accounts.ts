@@ -1,36 +1,21 @@
-import fs from "fs";
-import path from "path";
-import { fileURLToPath } from "url";
+import fs from "node:fs";
+import {
+  ensureDataDir,
+  getAccountPath,
+  getDataDir,
+  getProfileDir,
+  getStorageStatePath,
+} from "./paths.js";
 import type { AccountConfig } from "./types.js";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const ACCOUNTS_DIR = path.join(__dirname, "..", "accounts");
-
-export function ensureAccountsDir(): void {
-  if (!fs.existsSync(ACCOUNTS_DIR)) {
-    fs.mkdirSync(ACCOUNTS_DIR, { recursive: true });
-  }
-}
-
-export function getAccountsDir(): string {
-  return ACCOUNTS_DIR;
-}
-
-export function getAccountPath(name: string): string {
-  return path.join(ACCOUNTS_DIR, `${name}.json`);
-}
-
-export function getStorageStatePath(name: string): string {
-  return path.join(ACCOUNTS_DIR, `${name}-storage.json`);
-}
-
 export function listAccounts(): AccountConfig[] {
-  ensureAccountsDir();
-  const files = fs.readdirSync(ACCOUNTS_DIR);
+  ensureDataDir();
+  const dir = getDataDir();
+  const files = fs.readdirSync(dir);
   return files
     .filter((f) => f.endsWith(".json") && !f.includes("-storage"))
     .map((f) => {
-      const content = fs.readFileSync(path.join(ACCOUNTS_DIR, f), "utf-8");
+      const content = fs.readFileSync(`${dir}/${f}`, "utf-8");
       return JSON.parse(content) as AccountConfig;
     });
 }
@@ -40,7 +25,7 @@ export function accountExists(name: string): boolean {
 }
 
 export function saveAccount(name: string): void {
-  ensureAccountsDir();
+  ensureDataDir();
   const config: AccountConfig = {
     name,
     addedAt: new Date().toISOString(),
@@ -51,6 +36,7 @@ export function saveAccount(name: string): void {
 export function removeAccount(name: string): boolean {
   const accountPath = getAccountPath(name);
   const storagePath = getStorageStatePath(name);
+  const profileDir = getProfileDir(name);
 
   if (!fs.existsSync(accountPath)) {
     return false;
@@ -59,6 +45,9 @@ export function removeAccount(name: string): boolean {
   fs.unlinkSync(accountPath);
   if (fs.existsSync(storagePath)) {
     fs.unlinkSync(storagePath);
+  }
+  if (fs.existsSync(profileDir)) {
+    fs.rmSync(profileDir, { recursive: true });
   }
   return true;
 }

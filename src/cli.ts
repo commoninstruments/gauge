@@ -1,15 +1,20 @@
 #!/usr/bin/env node
 
-import { program } from "commander";
 import chalk from "chalk";
+import { program } from "commander";
 import {
-  listAccounts,
   accountExists,
-  saveAccount,
+  listAccounts,
   removeAccount,
+  saveAccount,
 } from "./accounts.js";
 import { addAccount, fetchAllUsage } from "./api.js";
-import { displayUsageTable, displayQuickRecommendation } from "./display.js";
+import { displayQuickRecommendation, displayUsageTable } from "./display.js";
+import { migrateIfNeeded } from "./migrate.js";
+
+if (migrateIfNeeded()) {
+  console.log(chalk.gray("Migrated account data to ~/.claudestatus/"));
+}
 
 program
   .name("claudestatus")
@@ -24,12 +29,16 @@ program
 
     if (accounts.length === 0) {
       console.log(chalk.yellow("\nNo accounts configured."));
-      console.log("Add one with: " + chalk.cyan("claudestatus add <name>"));
+      console.log(`Add one with: ${chalk.cyan("claudestatus add <name>")}`);
       console.log();
       return;
     }
 
-    console.log(chalk.gray("\nFetching usage data (browser windows will flash briefly)...\n"));
+    console.log(
+      chalk.gray(
+        "\nFetching usage data (browser windows will flash briefly)...\n"
+      )
+    );
 
     const usage = await fetchAllUsage(accounts.map((a) => a.name));
 
@@ -47,7 +56,11 @@ program
   .action(async (name: string) => {
     if (accountExists(name)) {
       console.log(chalk.yellow(`\nAccount "${name}" already exists.`));
-      console.log("Use " + chalk.cyan(`claudestatus refresh ${name}`) + " to re-authenticate.");
+      console.log(
+        "Use " +
+          chalk.cyan(`claudestatus refresh ${name}`) +
+          " to re-authenticate."
+      );
       return;
     }
 
@@ -79,7 +92,7 @@ program
   .action(async (name: string) => {
     if (!accountExists(name)) {
       console.log(chalk.yellow(`\nAccount "${name}" not found.`));
-      console.log("Use " + chalk.cyan(`claudestatus add ${name}`) + " to add it.");
+      console.log(`Use ${chalk.cyan(`claudestatus add ${name}`)} to add it.`);
       return;
     }
 
@@ -100,7 +113,7 @@ program
 
     if (accounts.length === 0) {
       console.log(chalk.yellow("\nNo accounts configured."));
-      console.log("Add one with: " + chalk.cyan("claudestatus add <name>"));
+      console.log(`Add one with: ${chalk.cyan("claudestatus add <name>")}`);
       return;
     }
 

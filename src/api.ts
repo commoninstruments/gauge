@@ -1,28 +1,58 @@
-import { chromium, request, type Page } from "playwright";
-import fs from "fs";
-import path from "path";
-import os from "os";
-import { getStorageStatePath, getAccountsDir } from "./accounts.js";
-import type { Organization, UsageResponse, AccountUsage } from "./types.js";
+import fs from "node:fs";
+import {
+  type APIResponse,
+  chromium,
+  type Page,
+  request,
+} from "playwright-core";
+import { assertChromeInstalled } from "./chrome.js";
+import { getProfileDir, getStorageStatePath } from "./paths.js";
+import type {
+  AccountUsage,
+  Organization,
+  Plan,
+  UsageResponse,
+} from "./types.js";
+
+function derivePlan(org: Organization): Plan {
+  const tier = org.rate_limit_tier ?? "";
+  if (tier.includes("claude_max_20x")) {
+    return "max_20x";
+  }
+  if (tier.includes("claude_max_5x")) {
+    return "max_5x";
+  }
+  if (tier.includes("claude_max")) {
+    return "max";
+  }
+  if (org.capabilities.includes("claude_max")) {
+    return "max";
+  }
+  if (org.capabilities.includes("chat")) {
+    return "pro";
+  }
+  return "unknown";
+}
 
 const CLAUDE_URL = "https://claude.ai";
-const LOGIN_TIMEOUT_MS = 300000;
+const LOGIN_URL_RE = /claude\.ai\/(new|recents|chat|settings)/;
+const LOGIN_TIMEOUT_MS = 300_000;
 const USER_AGENT =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36";
 
-// Get a unique profile directory for each account
-function getProfileDir(name: string): string {
-  return path.join(getAccountsDir(), `profile-${name}`);
-}
-
 export async function addAccount(name: string): Promise<boolean> {
+  assertChromeInstalled();
   const profileDir = getProfileDir(name);
 
   // Use launchPersistentContext with a real Chrome executable
   // This creates a more realistic browser fingerprint
   console.log(`\nOpening browser for account "${name}"...`);
-  console.log("Please log in to Claude. The browser will close automatically when done.");
-  console.log("(If Cloudflare blocks you, try logging in first in your regular Chrome)\n");
+  console.log(
+    "Please log in to Claude. The browser will close automatically when done."
+  );
+  console.log(
+    "(If Cloudflare blocks you, try logging in first in your regular Chrome)\n"
+  );
 
   const context = await chromium.launchPersistentContext(profileDir, {
     headless: false,
@@ -57,7 +87,9 @@ export async function addAccount(name: string): Promise<boolean> {
   try {
     await assertLoggedIn(page);
   } catch {
-    console.error("Login verification failed. Please make sure you're logged in.");
+    console.error(
+      "Login verification failed. Please make sure you're logged in."
+    );
     await context.close();
     return false;
   }
@@ -70,17 +102,19 @@ export async function addAccount(name: string): Promise<boolean> {
   return true;
 }
 
-export async function fetchUsageForAccount(name: string): Promise<AccountUsage> {
+export async function fetchUsageForAccount(
+  name: string
+): Promise<AccountUsage> {
   const profileDir = getProfileDir(name);
   const storagePath = getStorageStatePath(name);
 
-  if (!fs.existsSync(profileDir) && !fs.existsSync(storagePath)) {
+  if (!(fs.existsSync(profileDir) || fs.existsSync(storagePath))) {
     return {
       name,
       plan: "unknown",
       orgUuid: "",
       usage: {} as UsageResponse,
-      error: "No saved session. Run: claudestatus add " + name,
+      error: `No saved session. Run: claudestatus add ${name}`,
     };
   }
 
@@ -89,8 +123,8 @@ export async function fetchUsageForAccount(name: string): Promise<AccountUsage> 
     return requestResult;
   }
 
-  // Use the same persistent profile for consistent browser fingerprint
-  // Using headed mode which is less detectable than old headless
+  assertChromeInstalled();
+
   const context = await chromium.launchPersistentContext(profileDir, {
     headless: false, // Must be visible to bypass Cloudflare
     channel: "chrome",
@@ -107,7 +141,9 @@ export async function fetchUsageForAccount(name: string): Promise<AccountUsage> 
 
   try {
     // Navigate to get cookies working
-    await page.goto(`${CLAUDE_URL}/settings/usage`, { waitUntil: "domcontentloaded" });
+    await page.goto(`${CLAUDE_URL}/settings/usage`, {
+      waitUntil: "domcontentloaded",
+    });
 
     // Check if we hit Cloudflare
     const content = await page.content();
@@ -116,7 +152,7 @@ export async function fetchUsageForAccount(name: string): Promise<AccountUsage> 
       content.includes("challenge-platform") ||
       content.includes("cf-turnstile")
     ) {
-      throw new Error("Cloudflare block - run: claudestatus refresh " + name);
+      throw new Error(`Cloudflare block - run: claudestatus refresh ${name}`);
     }
 
     const orgs = await fetchOrganizationsFromPage(page);
@@ -125,11 +161,7 @@ export async function fetchUsageForAccount(name: string): Promise<AccountUsage> 
     }
 
     const org = orgs[0];
-    const plan = org.capabilities.includes("claude_max")
-      ? "max"
-      : org.capabilities.includes("chat")
-        ? "pro"
-        : "unknown";
+    const plan = derivePlan(org);
 
     const usageResponse = await fetchUsageFromPage(page, org.uuid);
 
@@ -140,7 +172,7 @@ export async function fetchUsageForAccount(name: string): Promise<AccountUsage> 
 
     return {
       name,
-      plan: plan as "pro" | "max" | "unknown",
+      plan,
       orgUuid: org.uuid,
       usage: usageResponse as UsageResponse,
     };
@@ -155,7 +187,7 @@ export async function fetchUsageForAccount(name: string): Promise<AccountUsage> 
         plan: "unknown",
         orgUuid: "",
         usage: {} as UsageResponse,
-        error: "Session expired. Run: claudestatus refresh " + name,
+        error: `Session expired. Run: claudestatus refresh ${name}`,
       };
     }
 
@@ -169,14 +201,16 @@ export async function fetchUsageForAccount(name: string): Promise<AccountUsage> 
   }
 }
 
-export async function fetchAllUsage(accountNames: string[]): Promise<AccountUsage[]> {
+export async function fetchAllUsage(
+  accountNames: string[]
+): Promise<AccountUsage[]> {
   // Fetch sequentially - parallel would open too many browser windows
   const results: AccountUsage[] = [];
   for (const name of accountNames) {
     process.stdout.write(`  Checking ${name}...`);
     const usage = await fetchUsageForAccount(name);
     if (usage.error) {
-      console.log(` error`);
+      console.log(" error");
     } else {
       console.log(` ${usage.usage.five_hour?.utilization ?? 0}% session`);
     }
@@ -185,11 +219,14 @@ export async function fetchAllUsage(accountNames: string[]): Promise<AccountUsag
   return results;
 }
 
-async function waitForLoginSignal(page: Page, timeoutMs: number): Promise<boolean> {
+async function waitForLoginSignal(
+  page: Page,
+  timeoutMs: number
+): Promise<boolean> {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
     const currentUrl = page.url();
-    if (/claude\.ai\/(new|recents|chat|settings)/.test(currentUrl)) {
+    if (LOGIN_URL_RE.test(currentUrl)) {
       return true;
     }
 
@@ -224,19 +261,52 @@ async function assertLoggedIn(page: Page): Promise<void> {
 async function fetchOrganizationsFromPage(page: Page): Promise<Organization[]> {
   const orgsResponse = await page.evaluate(async () => {
     const res = await fetch("https://claude.ai/api/organizations");
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}`);
+    }
     return res.json();
   });
   return orgsResponse as Organization[];
 }
 
-async function fetchUsageFromPage(page: Page, uuid: string): Promise<UsageResponse> {
+async function fetchUsageFromPage(
+  page: Page,
+  uuid: string
+): Promise<UsageResponse> {
   const usageResponse = await page.evaluate(async (orgUuid: string) => {
-    const res = await fetch(`https://claude.ai/api/organizations/${orgUuid}/usage`);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const res = await fetch(
+      `https://claude.ai/api/organizations/${orgUuid}/usage`
+    );
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}`);
+    }
     return res.json();
   }, uuid);
   return usageResponse as UsageResponse;
+}
+
+function expiredError(name: string): AccountUsage {
+  return {
+    name,
+    plan: "unknown",
+    orgUuid: "",
+    usage: {} as UsageResponse,
+    error: `Session expired. Run: claudestatus refresh ${name}`,
+  };
+}
+
+function checkResponse(
+  name: string,
+  res: APIResponse
+): AccountUsage | null | "ok" {
+  if (res.status() === 401) {
+    return expiredError(name);
+  }
+  if (res.status() === 403) {
+    const contentType = res.headers()["content-type"] ?? "";
+    return contentType.includes("text/html") ? null : expiredError(name);
+  }
+  return res.ok() ? "ok" : null;
 }
 
 async function fetchUsageViaRequest(
@@ -258,32 +328,9 @@ async function fetchUsageViaRequest(
 
   try {
     const orgsRes = await api.get("/api/organizations");
-    if (orgsRes.status() === 401) {
-      return {
-        name,
-        plan: "unknown",
-        orgUuid: "",
-        usage: {} as UsageResponse,
-        error: "Session expired. Run: claudestatus refresh " + name,
-      };
-    }
-
-    if (orgsRes.status() === 403) {
-      const contentType = orgsRes.headers()["content-type"] ?? "";
-      if (contentType.includes("text/html")) {
-        return null;
-      }
-      return {
-        name,
-        plan: "unknown",
-        orgUuid: "",
-        usage: {} as UsageResponse,
-        error: "Session expired. Run: claudestatus refresh " + name,
-      };
-    }
-
-    if (!orgsRes.ok()) {
-      return null;
+    const orgsCheck = checkResponse(name, orgsRes);
+    if (orgsCheck !== "ok") {
+      return orgsCheck;
     }
 
     const orgs = (await orgsRes.json()) as Organization[];
@@ -298,39 +345,12 @@ async function fetchUsageViaRequest(
     }
 
     const org = orgs[0];
-    const plan = org.capabilities.includes("claude_max")
-      ? "max"
-      : org.capabilities.includes("chat")
-        ? "pro"
-        : "unknown";
+    const plan = derivePlan(org);
 
     const usageRes = await api.get(`/api/organizations/${org.uuid}/usage`);
-    if (usageRes.status() === 401) {
-      return {
-        name,
-        plan: "unknown",
-        orgUuid: "",
-        usage: {} as UsageResponse,
-        error: "Session expired. Run: claudestatus refresh " + name,
-      };
-    }
-
-    if (usageRes.status() === 403) {
-      const contentType = usageRes.headers()["content-type"] ?? "";
-      if (contentType.includes("text/html")) {
-        return null;
-      }
-      return {
-        name,
-        plan: "unknown",
-        orgUuid: "",
-        usage: {} as UsageResponse,
-        error: "Session expired. Run: claudestatus refresh " + name,
-      };
-    }
-
-    if (!usageRes.ok()) {
-      return null;
+    const usageCheck = checkResponse(name, usageRes);
+    if (usageCheck !== "ok") {
+      return usageCheck;
     }
 
     const usage = (await usageRes.json()) as UsageResponse;
@@ -339,7 +359,7 @@ async function fetchUsageViaRequest(
 
     return {
       name,
-      plan: plan as "pro" | "max" | "unknown",
+      plan,
       orgUuid: org.uuid,
       usage,
     };
@@ -351,7 +371,7 @@ async function fetchUsageViaRequest(
         plan: "unknown",
         orgUuid: "",
         usage: {} as UsageResponse,
-        error: "Session expired. Run: claudestatus refresh " + name,
+        error: `Session expired. Run: claudestatus refresh ${name}`,
       };
     }
     return null;

@@ -37,7 +37,8 @@ claudestatus --quick
 ```
 
 ## Notes
-- Account sessions are stored locally in `accounts/` (ignored by git).
+- Account data is stored in `~/.claudestatus/` (persists across reinstalls).
+- Uses `playwright-core` — no bundled browser download; requires Chrome installed on your system.
 - If Cloudflare blocks a session, re-run `refresh` for that account.
 
 ## License

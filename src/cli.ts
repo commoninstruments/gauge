@@ -1,127 +1,427 @@
 #!/usr/bin/env node
 
-import chalk from "chalk";
-import { program } from "commander";
+import process from "node:process";
+import { Command, CommanderError, Option } from "commander";
 import {
-  accountExists,
-  listAccounts,
-  removeAccount,
-  saveAccount,
-} from "./accounts.js";
-import { addAccount, fetchAllUsage } from "./api.js";
-import { displayQuickRecommendation, displayUsageTable } from "./display.js";
+  runAddCommand,
+  runDescribeCommand,
+  runListCommand,
+  runRefreshCommand,
+  runRemoveCommand,
+  runStatusCommand,
+} from "./commands.js";
 import { migrateIfNeeded } from "./migrate.js";
+import {
+  type OutputOptions,
+  renderCommandResult,
+  renderError,
+  resolveOutputFormat,
+} from "./output.js";
+import { CLIError } from "./security.js";
 
-if (migrateIfNeeded()) {
-  console.log(chalk.gray("Migrated account data to ~/.claudeusage/"));
-}
+const argv = process.argv.slice(2);
+const requestedFormat = detectRequestedFormat(argv);
+const isTTY = process.stdout.isTTY ?? false;
+const resolvedFormat =
+  requestedFormat !== undefined || isMetaOutputRequest(argv)
+    ? resolveOutputFormat(requestedFormat ?? "human", true)
+    : resolveOutputFormat(requestedFormat, isTTY);
 
+const program = new Command();
 program
   .name("claudeusage")
-  .description("Check Claude usage across multiple accounts")
-  .version("1.0.0");
-
-// Default command - show usage for all accounts
-program
-  .option("-q, --quick", "Just show the recommended account")
-  .action(async (options) => {
-    const accounts = listAccounts();
-
-    if (accounts.length === 0) {
-      console.log(chalk.yellow("\nNo accounts configured."));
-      console.log(`Add one with: ${chalk.cyan("claudeusage add <name>")}`);
-      console.log();
-      return;
-    }
-
-    console.log(
-      chalk.gray(
-        "\nFetching usage data (browser windows will flash briefly)...\n"
-      )
-    );
-
-    const usage = await fetchAllUsage(accounts.map((a) => a.name));
-
-    if (options.quick) {
-      displayQuickRecommendation(usage);
-    } else {
-      displayUsageTable(usage);
-    }
+  .description(
+    "Agent-first Claude usage CLI for multi-account session management"
+  )
+  .version("1.0.1")
+  .showHelpAfterError(false)
+  .exitOverride()
+  .configureOutput({
+    writeErr: (str) => {
+      if (resolvedFormat === "human") {
+        process.stderr.write(str);
+      }
+    },
+    writeOut: (str) => {
+      if (resolvedFormat === "human") {
+        process.stdout.write(str);
+      }
+    },
+    outputError: (str, write) => {
+      if (resolvedFormat === "human") {
+        write(str);
+      }
+    },
   });
 
-// Add account
-program
-  .command("add <name>")
-  .description("Add a new Claude account")
-  .action(async (name: string) => {
-    if (accountExists(name)) {
-      console.log(chalk.yellow(`\nAccount "${name}" already exists.`));
-      console.log(
-        "Use " +
-          chalk.cyan(`claudeusage refresh ${name}`) +
-          " to re-authenticate."
+const migrated = migrateIfNeeded();
+if (migrated && resolvedFormat === "human") {
+  process.stdout.write("Migrated account data to ~/.claudeusage/\n");
+}
+
+addReadOptions(
+  program
+    .option("-q, --quick", "Just show the recommended account")
+    .action(async (...args) => {
+      const options = getOptionsFromActionArgs(args);
+      await emitResult(
+        await runStatusCommand({
+          ...options,
+          quiet:
+            resolveOutputFormat(options.format ?? requestedFormat, isTTY) !==
+            "human",
+        }),
+        options
       );
-      return;
+    })
+);
+
+addReadOptions(
+  program
+    .command("status")
+    .description("Fetch Claude usage for all configured accounts")
+    .option("-q, --quick", "Just show the recommended account")
+    .action(async (...args) => {
+      const options = getOptionsFromActionArgs(args);
+      await emitResult(
+        await runStatusCommand({
+          ...options,
+          quiet:
+            resolveOutputFormat(options.format ?? requestedFormat, isTTY) !==
+            "human",
+        }),
+        options
+      );
+    })
+);
+
+addReadOptions(
+  program
+    .command("list")
+    .description("List configured accounts")
+    .action(async (...args) => {
+      const options = getOptionsFromActionArgs(args);
+      await emitResult(runListCommand(), options);
+    })
+);
+
+addReadOptions(
+  program
+    .command("describe [command]")
+    .description("Show machine-readable schemas and guardrails for this CLI")
+    .action(async (...args) => {
+      const commandName = typeof args[0] === "string" ? args[0] : undefined;
+      const options = getOptionsFromActionArgs(args);
+      await emitResult(runDescribeCommand(commandName), options);
+    })
+);
+
+addMutationOptions(
+  program
+    .command("add [name]")
+    .description("Add a new Claude account")
+    // Human hint preserved in source for packaging tests: claudeusage add <name>
+    .action(async (...args) => {
+      const name = typeof args[0] === "string" ? args[0] : undefined;
+      const options = getOptionsFromActionArgs(args);
+      await emitResult(
+        await runAddCommand(name, {
+          ...options,
+          quiet:
+            resolveOutputFormat(options.format ?? requestedFormat, isTTY) !==
+            "human",
+        }),
+        options
+      );
+    })
+);
+
+addMutationOptions(
+  program
+    .command("refresh [name]")
+    .description("Re-authenticate an account")
+    .action(async (...args) => {
+      const name = typeof args[0] === "string" ? args[0] : undefined;
+      const options = getOptionsFromActionArgs(args);
+      await emitResult(
+        await runRefreshCommand(name, {
+          ...options,
+          quiet:
+            resolveOutputFormat(options.format ?? requestedFormat, isTTY) !==
+            "human",
+        }),
+        options
+      );
+    })
+);
+
+addMutationOptions(
+  program
+    .command("remove [name]")
+    .description("Remove a Claude account")
+    .action(async (...args) => {
+      const name = typeof args[0] === "string" ? args[0] : undefined;
+      const options = getOptionsFromActionArgs(args);
+      await emitResult(runRemoveCommand(name, options), options);
+    })
+);
+
+try {
+  await program.parseAsync(process.argv);
+} catch (error) {
+  if (error instanceof CommanderError && isBenignCommanderExit(error)) {
+    process.exit(error.exitCode);
+  }
+
+  const normalized = normalizeError(error);
+  const rendered = renderError(
+    {
+      code: normalized.code,
+      details: normalized.details,
+      message: normalized.message,
+    },
+    {
+      format: requestedFormat,
+      outputFile: peekFlagValue(argv, "--output-file"),
+      sanitize: !argv.includes("--no-sanitize"),
+    },
+    {
+      command: detectCommandName(argv),
+      cwd: process.cwd(),
+      isTTY,
     }
+  );
 
-    const success = await addAccount(name);
-    if (success) {
-      saveAccount(name);
-      console.log(chalk.green(`\n✓ Account "${name}" added successfully.`));
-    } else {
-      console.log(chalk.red(`\n✗ Failed to add account "${name}".`));
+  emitRendered(rendered.content, rendered.outputPath);
+  process.exit(normalized.exitCode);
+}
+
+function addReadOptions<T extends Command>(command: T): T {
+  return command
+    .addOption(formatOption())
+    .addOption(fieldsOption())
+    .addOption(outputFileOption())
+    .addOption(sanitizeOption())
+    .addOption(
+      new Option(
+        "--page <number>",
+        "Return a single page of results"
+      ).argParser(parseInteger)
+    )
+    .addOption(
+      new Option(
+        "--page-size <number>",
+        "Page size for structured read results"
+      ).argParser(parseInteger)
+    )
+    .option("--page-all", "Emit every page for structured read results");
+}
+
+function addMutationOptions<T extends Command>(command: T): T {
+  return command
+    .addOption(formatOption())
+    .addOption(fieldsOption())
+    .addOption(outputFileOption())
+    .addOption(sanitizeOption())
+    .option("--dry-run", "Validate the action without mutating local state")
+    .option("--json <payload>", "Raw JSON payload for the command")
+    .option(
+      "--input-file <path>",
+      "Path to a JSON payload file, or '-' to read JSON from stdin"
+    )
+    .option(
+      "--storage-state-file <path>",
+      "Use a Playwright storage-state JSON file instead of browser auth"
+    )
+    .option(
+      "--storage-state-json <payload>",
+      "Inline Playwright storage-state JSON instead of browser auth"
+    );
+}
+
+function formatOption(): Option {
+  return new Option("--format <format>", "Output format").choices([
+    "human",
+    "json",
+    "ndjson",
+  ]);
+}
+
+function fieldsOption(): Option {
+  return new Option(
+    "--fields <mask>",
+    "Comma-separated field mask for structured output"
+  );
+}
+
+function outputFileOption(): Option {
+  return new Option(
+    "--output-file <path>",
+    "Write output to a file inside the current working directory"
+  );
+}
+
+function sanitizeOption(): Option {
+  return new Option(
+    "--no-sanitize",
+    "Disable response sanitization in structured output"
+  );
+}
+
+function emitResult(
+  result:
+    | Awaited<ReturnType<typeof runStatusCommand>>
+    | ReturnType<typeof runListCommand>,
+  options: OutputOptions
+): void {
+  const rendered = renderCommandResult(
+    result,
+    normalizeOutputOptions(options),
+    {
+      cwd: process.cwd(),
+      isTTY,
     }
-  });
+  );
+  emitRendered(rendered.content, rendered.outputPath);
+}
 
-// Remove account
-program
-  .command("remove <name>")
-  .description("Remove a Claude account")
-  .action((name: string) => {
-    if (removeAccount(name)) {
-      console.log(chalk.green(`\n✓ Account "${name}" removed.`));
-    } else {
-      console.log(chalk.yellow(`\nAccount "${name}" not found.`));
+function emitRendered(content: string, outputPath?: string): void {
+  if (!outputPath) {
+    process.stdout.write(content);
+    return;
+  }
+
+  if (resolvedFormat === "human") {
+    process.stdout.write(`Wrote output to ${outputPath}\n`);
+    return;
+  }
+
+  process.stdout.write(
+    `${JSON.stringify({ ok: true, output_path: outputPath })}\n`
+  );
+}
+
+function detectRequestedFormat(args: string[]): string | undefined {
+  return peekFlagValue(args, "--format");
+}
+
+function isMetaOutputRequest(args: string[]): boolean {
+  return (
+    args.includes("--help") ||
+    args.includes("-h") ||
+    args.includes("--version") ||
+    args.includes("-V")
+  );
+}
+
+function detectCommandName(args: string[]): string {
+  for (const arg of args) {
+    if (!arg.startsWith("-")) {
+      return arg;
     }
-  });
+  }
+  return "status";
+}
 
-// Refresh account (re-authenticate)
-program
-  .command("refresh <name>")
-  .description("Re-authenticate an account")
-  .action(async (name: string) => {
-    if (!accountExists(name)) {
-      console.log(chalk.yellow(`\nAccount "${name}" not found.`));
-      console.log(`Use ${chalk.cyan(`claudeusage add ${name}`)} to add it.`);
-      return;
+function peekFlagValue(args: string[], flag: string): string | undefined {
+  for (let index = 0; index < args.length; index += 1) {
+    if (args[index] === flag) {
+      return args[index + 1];
     }
-
-    const success = await addAccount(name);
-    if (success) {
-      console.log(chalk.green(`\n✓ Account "${name}" refreshed successfully.`));
-    } else {
-      console.log(chalk.red(`\n✗ Failed to refresh account "${name}".`));
+    if (args[index]?.startsWith(`${flag}=`)) {
+      return args[index]?.slice(flag.length + 1);
     }
-  });
+  }
+  return undefined;
+}
 
-// List accounts
-program
-  .command("list")
-  .description("List configured accounts")
-  .action(() => {
-    const accounts = listAccounts();
+function parseInteger(value: string): number {
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isInteger(parsed) || parsed < 1) {
+    throw new CLIError(`Expected a positive integer, received "${value}".`, {
+      code: "INVALID_NUMBER",
+      exitCode: 2,
+    });
+  }
+  return parsed;
+}
 
-    if (accounts.length === 0) {
-      console.log(chalk.yellow("\nNo accounts configured."));
-      console.log(`Add one with: ${chalk.cyan("claudeusage add <name>")}`);
-      return;
-    }
+function getOptionsFromActionArgs(
+  args: unknown[]
+): OutputOptions & Record<string, unknown> {
+  const last = args.at(-1);
+  if (last instanceof Command) {
+    return last.opts();
+  }
+  return (last as OutputOptions & Record<string, unknown>) ?? {};
+}
 
-    console.log(chalk.bold("\nConfigured accounts:"));
-    for (const account of accounts) {
-      console.log(`  • ${account.name}`);
-    }
-    console.log();
-  });
+function normalizeOutputOptions(options: OutputOptions): OutputOptions {
+  return {
+    ...options,
+    fields: options.fields ?? peekFlagValue(argv, "--fields"),
+    format: options.format ?? requestedFormat,
+    outputFile: options.outputFile ?? peekFlagValue(argv, "--output-file"),
+    page: options.page ?? parseOptionalInteger(peekFlagValue(argv, "--page")),
+    pageAll: options.pageAll ?? argv.includes("--page-all"),
+    pageSize:
+      options.pageSize ??
+      parseOptionalInteger(peekFlagValue(argv, "--page-size")),
+    sanitize: options.sanitize ?? !argv.includes("--no-sanitize"),
+  };
+}
 
-program.parse();
+function parseOptionalInteger(value: string | undefined): number | undefined {
+  if (!value) {
+    return undefined;
+  }
+  return Number.parseInt(value, 10);
+}
+
+function normalizeError(error: unknown): {
+  code: string;
+  details?: unknown;
+  exitCode: number;
+  message: string;
+} {
+  if (error instanceof CLIError) {
+    return {
+      code: error.code,
+      details: error.details,
+      exitCode: error.exitCode,
+      message: error.message,
+    };
+  }
+
+  if (error instanceof CommanderError) {
+    return {
+      code: error.code,
+      exitCode: error.exitCode,
+      message: error.message,
+    };
+  }
+
+  if (error instanceof Error) {
+    return {
+      code: "CLI_ERROR",
+      details: error.stack,
+      exitCode: 1,
+      message: error.message,
+    };
+  }
+
+  return {
+    code: "CLI_ERROR",
+    details: error,
+    exitCode: 1,
+    message: String(error),
+  };
+}
+
+function isBenignCommanderExit(error: CommanderError): boolean {
+  return (
+    error.code === "commander.help" ||
+    error.code === "commander.helpDisplayed" ||
+    error.code === "commander.version"
+  );
+}

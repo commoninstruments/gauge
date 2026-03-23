@@ -8,6 +8,10 @@ import {
   getStorageStatePath,
   lockFile,
 } from "./paths.js";
+import {
+  parseStorageStateJson,
+  readStorageStateFile,
+} from "./storage-state.js";
 import type { AccountConfig } from "./types.js";
 
 export function listAccounts(): AccountConfig[] {
@@ -19,7 +23,8 @@ export function listAccounts(): AccountConfig[] {
     .map((f) => {
       const content = fs.readFileSync(path.join(dir, f), "utf-8");
       return JSON.parse(content) as AccountConfig;
-    });
+    })
+    .sort((a, b) => a.name.localeCompare(b.name));
 }
 
 export function accountExists(name: string): boolean {
@@ -35,6 +40,46 @@ export function saveAccount(name: string): void {
   const accountPath = getAccountPath(name);
   fs.writeFileSync(accountPath, JSON.stringify(config, null, 2));
   lockFile(accountPath);
+}
+
+export function importStorageState(
+  name: string,
+  options: { json?: string; filePath?: string }
+): string {
+  ensureDataDir();
+  const normalized =
+    options.json === undefined
+      ? readStorageStateFile(options.filePath ?? "")
+      : parseStorageStateJson(options.json);
+  const storagePath = getStorageStatePath(name);
+  fs.writeFileSync(storagePath, normalized, "utf8");
+  lockFile(storagePath);
+  return storagePath;
+}
+
+export function getAccountArtifacts(name: string): {
+  accountPath: string;
+  storagePath: string;
+  profileDir: string;
+} {
+  return {
+    accountPath: getAccountPath(name),
+    storagePath: getStorageStatePath(name),
+    profileDir: getProfileDir(name),
+  };
+}
+
+export function listAccountDetails(): Array<
+  AccountConfig & { hasStorageState: boolean; hasProfileDir: boolean }
+> {
+  return listAccounts().map((account) => {
+    const artifacts = getAccountArtifacts(account.name);
+    return {
+      ...account,
+      hasStorageState: fs.existsSync(artifacts.storagePath),
+      hasProfileDir: fs.existsSync(artifacts.profileDir),
+    };
+  });
 }
 
 export function removeAccount(name: string): boolean {

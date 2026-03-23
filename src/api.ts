@@ -40,19 +40,25 @@ const LOGIN_TIMEOUT_MS = 300_000;
 const USER_AGENT =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36";
 
-export async function addAccount(name: string): Promise<boolean> {
+export async function addAccount(
+  name: string,
+  options: { quiet?: boolean } = {}
+): Promise<boolean> {
   assertChromeInstalled();
   const profileDir = getProfileDir(name);
+  const quiet = options.quiet ?? false;
 
   // Use launchPersistentContext with a real Chrome executable
   // This creates a more realistic browser fingerprint
-  console.log(`\nOpening browser for account "${name}"...`);
-  console.log(
-    "Please log in to Claude. The browser will close automatically when done."
-  );
-  console.log(
-    "(If Cloudflare blocks you, try logging in first in your regular Chrome)\n"
-  );
+  if (!quiet) {
+    console.log(`\nOpening browser for account "${name}"...`);
+    console.log(
+      "Please log in to Claude. The browser will close automatically when done."
+    );
+    console.log(
+      "(If Cloudflare blocks you, try logging in first in your regular Chrome)\n"
+    );
+  }
 
   const context = await chromium.launchPersistentContext(profileDir, {
     headless: false,
@@ -74,12 +80,16 @@ export async function addAccount(name: string): Promise<boolean> {
 
   const loginDetected = await waitForLoginSignal(page, LOGIN_TIMEOUT_MS);
   if (!loginDetected) {
-    console.error("Login timed out. Please try again.");
+    if (!quiet) {
+      console.error("Login timed out. Please try again.");
+    }
     await context.close();
     return false;
   }
 
-  console.log("Login detected, verifying...");
+  if (!quiet) {
+    console.log("Login detected, verifying...");
+  }
 
   // Give it a moment for cookies to settle
   await page.waitForTimeout(2000);
@@ -87,9 +97,11 @@ export async function addAccount(name: string): Promise<boolean> {
   try {
     await assertLoggedIn(page);
   } catch {
-    console.error(
-      "Login verification failed. Please make sure you're logged in."
-    );
+    if (!quiet) {
+      console.error(
+        "Login verification failed. Please make sure you're logged in."
+      );
+    }
     await context.close();
     return false;
   }
@@ -195,17 +207,23 @@ export async function fetchUsageForAccount(
 }
 
 export async function fetchAllUsage(
-  accountNames: string[]
+  accountNames: string[],
+  options: { quiet?: boolean } = {}
 ): Promise<AccountUsage[]> {
   // Fetch sequentially - parallel would open too many browser windows
   const results: AccountUsage[] = [];
+  const quiet = options.quiet ?? false;
   for (const name of accountNames) {
-    process.stdout.write(`  Checking ${name}...`);
+    if (!quiet) {
+      process.stdout.write(`  Checking ${name}...`);
+    }
     const usage = await fetchUsageForAccount(name);
-    if (usage.error) {
-      console.log(" error");
-    } else {
-      console.log(` ${usage.usage.five_hour?.utilization ?? 0}% session`);
+    if (!quiet) {
+      if (usage.error) {
+        console.log(" error");
+      } else {
+        console.log(` ${usage.usage.five_hour?.utilization ?? 0}% session`);
+      }
     }
     results.push(usage);
   }
@@ -268,7 +286,7 @@ async function fetchUsageFromPage(
 ): Promise<UsageResponse> {
   const usageResponse = await page.evaluate(async (orgUuid: string) => {
     const res = await fetch(
-      `https://claude.ai/api/organizations/${orgUuid}/usage`
+      `https://claude.ai/api/organizations/${encodeURIComponent(orgUuid)}/usage`
     );
     if (!res.ok) {
       throw new Error(`HTTP ${res.status}`);
@@ -340,7 +358,9 @@ async function fetchUsageViaRequest(
     const org = orgs[0];
     const plan = derivePlan(org);
 
-    const usageRes = await api.get(`/api/organizations/${org.uuid}/usage`);
+    const usageRes = await api.get(
+      `/api/organizations/${encodeURIComponent(org.uuid)}/usage`
+    );
     const usageCheck = checkResponse(name, usageRes);
     if (usageCheck !== "ok") {
       return usageCheck;

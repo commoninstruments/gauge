@@ -44,10 +44,10 @@ function usageBar(percent: number, width = 35): string {
 }
 
 interface Availability {
+  reason: "weekly" | "session" | "none";
   status: "available" | "wait" | "error";
   waitLabel: string;
   waitMs: number;
-  reason: "weekly" | "session" | "none";
 }
 
 function getAvailability(account: AccountUsage): Availability {
@@ -291,7 +291,31 @@ function pickNextAccount(accounts: AccountUsage[]): {
   });
 }
 
+function formatRecommendationWindow(account: AccountUsage): string | null {
+  if (account.error) {
+    return null;
+  }
+
+  if (account.usage.five_hour?.resets_at) {
+    return `for ${formatResetTime(account.usage.five_hour.resets_at)}`;
+  }
+
+  if (account.usage.seven_day?.resets_at) {
+    return `weekly reset ${formatResetTime(account.usage.seven_day.resets_at)}`;
+  }
+
+  if ((account.usage.five_hour?.utilization ?? 0) === 0) {
+    return "session not started";
+  }
+
+  return null;
+}
+
 export function displayUsageTable(accounts: AccountUsage[]): void {
+  console.log(formatUsageTable(accounts));
+}
+
+export function formatUsageTable(accounts: AccountUsage[]): string {
   const sorted = sortByRecommendation(accounts);
 
   // Fleet summary
@@ -307,44 +331,53 @@ export function displayUsageTable(accounts: AccountUsage[]): void {
         )
       : 0;
 
-  console.log();
-  console.log(chalk.bold("  Claude Usage Dashboard"));
-  console.log(
+  const lines: string[] = [];
+  lines.push("");
+  lines.push(chalk.bold("  Claude Usage Dashboard"));
+  lines.push(
     chalk.gray(
-      `  ${total} account${total !== 1 ? "s" : ""} · ${availableCount} available · ${avgLoad}% avg load`
+      `  ${total} account${total === 1 ? "" : "s"} · ${availableCount} available · ${avgLoad}% avg load`
     )
   );
 
   // Account cards
   for (const { account, availability } of sorted) {
-    console.log();
-    console.log(formatAccountCard(account, availability));
+    lines.push("");
+    lines.push(formatAccountCard(account, availability));
   }
 
   // Footer separator + recommendation
-  console.log();
-  console.log(`  ${chalk.gray("─".repeat(CARD_WIDTH + 1))}`);
+  lines.push("");
+  lines.push(`  ${chalk.gray("─".repeat(CARD_WIDTH + 1))}`);
 
   const next = pickNextAccount(accounts);
   if (next) {
     const label = formatNextUseLabel(next.availability);
-    console.log(
-      `  ${chalk.cyan("→")} Best: ${chalk.bold(next.account.name)} ${chalk.gray(`(${label})`)}`
+    const timeWindow = formatRecommendationWindow(next.account);
+    lines.push(
+      `  ${chalk.cyan("→")} Best: ${chalk.bold(next.account.name)} ${chalk.gray(
+        `(${timeWindow ? `${label}, ${timeWindow}` : label})`
+      )}`
     );
   }
 
-  console.log();
+  lines.push("");
+  return lines.join("\n");
 }
 
 export function displayQuickRecommendation(accounts: AccountUsage[]): void {
+  console.log(formatQuickRecommendation(accounts));
+}
+
+export function formatQuickRecommendation(accounts: AccountUsage[]): string {
   const next = pickNextAccount(accounts);
   if (!next) {
-    console.log(
-      chalk.red("No accounts available. Run: claudeusage add <name>")
-    );
-    return;
+    return chalk.red("No accounts available. Run: claudeusage add <name>");
   }
 
   const nextUseLabel = formatNextUseLabel(next.availability);
-  console.log(`${next.account.name} (${nextUseLabel})`);
+  const timeWindow = formatRecommendationWindow(next.account);
+  return timeWindow
+    ? `${next.account.name} (${nextUseLabel}, ${timeWindow})`
+    : `${next.account.name} (${nextUseLabel})`;
 }

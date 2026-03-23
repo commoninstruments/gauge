@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { assertSafeIdentifier } from "./security.js";
 
 const DATA_DIR = path.join(os.homedir(), ".claudeusage");
 
@@ -18,14 +19,8 @@ export function lockFile(filePath: string): void {
   fs.chmodSync(filePath, 0o600);
 }
 
-const SAFE_NAME_RE = /^[a-zA-Z0-9_-]+$/;
-
 export function assertSafeName(name: string): void {
-  if (!SAFE_NAME_RE.test(name)) {
-    throw new Error(
-      `Account name "${name}" contains invalid characters. Use letters, numbers, hyphens, or underscores only.`
-    );
-  }
+  assertSafeIdentifier(name, "Account name");
 }
 
 export function getAccountPath(name: string): string {

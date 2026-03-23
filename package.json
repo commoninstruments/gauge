@@ -33,15 +33,19 @@
     "playwright-core": "^1.49.0"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.3.13",
+    "@biomejs/biome": "2.4.8",
     "@types/node": "^22.10.0",
     "husky": "9.1.7",
     "tsx": "^4.19.0",
     "typescript": "^5.9.3",
-    "ultracite": "7.1.1"
+    "ultracite": "7.3.2",
+    "lint-staged": "^16.4.0"
   },
   "engines": {
     "node": ">=18"
   },
-  "packageManager": "pnpm@10.15.1"
+  "packageManager": "pnpm@10.15.1",
+  "lint-staged": {
+    "*.{js,ts,jsx,tsx,json,jsonc,css}": "biome format --write --no-errors-on-unmatched"
+  }
 }

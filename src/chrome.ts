@@ -29,11 +29,10 @@ export function findChrome(): string | null {
 
 export function assertChromeInstalled(): void {
   if (!findChrome()) {
-    console.error(
+    throw new Error(
       "Chrome is required but was not found.\n\n" +
         "Install Google Chrome from: https://www.google.com/chrome/\n" +
         "claudeusage uses your system Chrome via Playwright — no bundled browser is included."
     );
-    process.exit(1);
   }
 }

@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import { CLIError } from "./security.js";
 
+/** Parse and normalize a raw JSON string as Playwright storage state. */
 export function parseStorageStateJson(storageStateJson: string): string {
   try {
     const parsed = JSON.parse(storageStateJson) as unknown;
@@ -17,6 +18,7 @@ export function parseStorageStateJson(storageStateJson: string): string {
   }
 }
 
+/** Read and validate a Playwright storage-state JSON file from disk. */
 export function readStorageStateFile(filePath: string): string {
   try {
     return parseStorageStateJson(fs.readFileSync(filePath, "utf8"));

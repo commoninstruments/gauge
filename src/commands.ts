@@ -41,8 +41,9 @@ interface RecommendationWindow {
   until: string | null;
 }
 
+/** Fetch usage for all accounts and build a status/recommendation result. */
 export async function runStatusCommand(
-  options: CommandOptions
+  options: CommandOptions,
 ): Promise<CommandResult> {
   const accounts = listAccountDetails();
   if (accounts.length === 0) {
@@ -64,7 +65,7 @@ export async function runStatusCommand(
 
   const usage = await fetchAllUsage(
     accounts.map((account) => account.name),
-    { quiet: options.quiet }
+    { quiet: options.quiet },
   );
   const recommendation = pickRecommendation(usage);
   const availableAccounts = usage.filter((account) => {
@@ -112,6 +113,7 @@ export async function runStatusCommand(
   };
 }
 
+/** List all configured accounts with their local artifact details. */
 export function runListCommand(): CommandResult {
   const accounts = listAccountDetails();
   const human =
@@ -132,6 +134,7 @@ export function runListCommand(): CommandResult {
   };
 }
 
+/** Return the runtime CLI schema, optionally filtered to a single command. */
 export function runDescribeCommand(commandName?: string): CommandResult {
   const data = describeCommands(commandName);
   return {
@@ -153,9 +156,10 @@ export function runDescribeCommand(commandName?: string): CommandResult {
   };
 }
 
+/** Add a new account via browser login or headless storage-state import. */
 export async function runAddCommand(
   name: string | undefined,
-  options: CommandOptions
+  options: CommandOptions,
 ): Promise<CommandResult> {
   const payload = resolveMutationPayload(name, options);
   if (accountExists(payload.name)) {
@@ -223,9 +227,10 @@ export async function runAddCommand(
   };
 }
 
+/** Re-authenticate an existing account via browser or storage-state import. */
 export async function runRefreshCommand(
   name: string | undefined,
-  options: CommandOptions
+  options: CommandOptions,
 ): Promise<CommandResult> {
   const payload = resolveMutationPayload(name, options);
   if (!accountExists(payload.name)) {
@@ -288,9 +293,10 @@ export async function runRefreshCommand(
   };
 }
 
+/** Remove an account and all its local auth artifacts. */
 export function runRemoveCommand(
   name: string | undefined,
-  options: CommandOptions
+  options: CommandOptions,
 ): CommandResult {
   const payload = resolveMutationPayload(name, options);
   if (!accountExists(payload.name)) {
@@ -338,7 +344,7 @@ export function runRemoveCommand(
 
 function resolveMutationPayload(
   name: string | undefined,
-  options: CommandOptions
+  options: CommandOptions,
 ): MutationPayload {
   const rawPayload = loadRawPayload(options);
   return {
@@ -347,7 +353,7 @@ function resolveMutationPayload(
       rawPayload?.storage_state_file ?? options.storageStateFile,
     storage_state_json:
       normalizeStorageStateJson(
-        rawPayload?.storage_state_json ?? options.storageStateJson
+        rawPayload?.storage_state_json ?? options.storageStateJson,
       ) ?? process.env.CLAUDEUSAGE_STORAGE_STATE_JSON,
   };
 }
@@ -378,7 +384,7 @@ function loadRawPayload(options: CommandOptions): MutationPayload | null {
 
 function resolveStorageStateMode(
   payload: MutationPayload,
-  options: CommandOptions
+  options: CommandOptions,
 ): { filePath?: string; json?: string } | null {
   const filePath =
     payload.storage_state_file ??
@@ -409,7 +415,7 @@ function normalizeStorageStateJson(value: unknown): string | undefined {
 }
 
 function pickRecommendation(
-  accounts: Awaited<ReturnType<typeof fetchAllUsage>>
+  accounts: Awaited<ReturnType<typeof fetchAllUsage>>,
 ): {
   account_window: RecommendationWindow | null;
   account: { name: string; plan: string } | null;
@@ -431,7 +437,7 @@ function pickRecommendation(
           : 0,
         account.usage.seven_day?.resets_at
           ? new Date(account.usage.seven_day.resets_at).getTime()
-          : 0
+          : 0,
       ),
     }))
     .sort((left, right) => {
@@ -465,7 +471,7 @@ function pickRecommendation(
 
 function getRecommendationWindow(
   account: Awaited<ReturnType<typeof fetchAllUsage>>[number],
-  blocked: boolean
+  blocked: boolean,
 ): RecommendationWindow {
   const fiveHour = account.usage.five_hour;
   const sevenDay = account.usage.seven_day;
@@ -517,7 +523,7 @@ function getRecommendationWindow(
 }
 
 function earliestFutureReset(
-  timestamps: Array<string | null | undefined>
+  timestamps: Array<string | null | undefined>,
 ): Date | null {
   const futureDates = timestamps
     .filter((value): value is string => typeof value === "string")

@@ -17,6 +17,7 @@ const CHROME_PATHS: Record<string, string[]> = {
   ],
 };
 
+/** Search platform-specific paths for a Chrome installation. */
 export function findChrome(): string | null {
   const candidates = CHROME_PATHS[process.platform] ?? [];
   for (const p of candidates) {
@@ -27,12 +28,13 @@ export function findChrome(): string | null {
   return null;
 }
 
+/** Throw with install instructions if Chrome is not found. */
 export function assertChromeInstalled(): void {
   if (!findChrome()) {
     throw new Error(
       "Chrome is required but was not found.\n\n" +
         "Install Google Chrome from: https://www.google.com/chrome/\n" +
-        "claudeusage uses your system Chrome via Playwright — no bundled browser is included."
+        "claudeusage uses your system Chrome via Playwright — no bundled browser is included.",
     );
   }
 }

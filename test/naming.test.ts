@@ -6,7 +6,8 @@ import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
-function readJson(filePath: string): any {
+// biome-ignore lint/suspicious/noExplicitAny: test-only JSON parsing
+function readJson(filePath: string): Record<string, any> {
   return JSON.parse(fs.readFileSync(filePath, "utf-8"));
 }
 

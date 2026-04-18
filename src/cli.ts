@@ -31,7 +31,7 @@ const program = new Command();
 program
   .name("claudeusage")
   .description(
-    "Agent-first Claude usage CLI for multi-account session management"
+    "Agent-first Claude usage CLI for multi-account session management",
   )
   .version("1.0.1")
   .showHelpAfterError(false)
@@ -71,9 +71,9 @@ addReadOptions(
             resolveOutputFormat(options.format ?? requestedFormat, isTTY) !==
             "human",
         }),
-        options
+        options,
       );
-    })
+    }),
 );
 
 addReadOptions(
@@ -90,9 +90,9 @@ addReadOptions(
             resolveOutputFormat(options.format ?? requestedFormat, isTTY) !==
             "human",
         }),
-        options
+        options,
       );
-    })
+    }),
 );
 
 addReadOptions(
@@ -102,7 +102,7 @@ addReadOptions(
     .action(async (...args) => {
       const options = getOptionsFromActionArgs(args);
       await emitResult(runListCommand(), options);
-    })
+    }),
 );
 
 addReadOptions(
@@ -113,7 +113,7 @@ addReadOptions(
       const commandName = typeof args[0] === "string" ? args[0] : undefined;
       const options = getOptionsFromActionArgs(args);
       await emitResult(runDescribeCommand(commandName), options);
-    })
+    }),
 );
 
 addMutationOptions(
@@ -131,9 +131,9 @@ addMutationOptions(
             resolveOutputFormat(options.format ?? requestedFormat, isTTY) !==
             "human",
         }),
-        options
+        options,
       );
-    })
+    }),
 );
 
 addMutationOptions(
@@ -150,9 +150,9 @@ addMutationOptions(
             resolveOutputFormat(options.format ?? requestedFormat, isTTY) !==
             "human",
         }),
-        options
+        options,
       );
-    })
+    }),
 );
 
 addMutationOptions(
@@ -163,7 +163,7 @@ addMutationOptions(
       const name = typeof args[0] === "string" ? args[0] : undefined;
       const options = getOptionsFromActionArgs(args);
       await emitResult(runRemoveCommand(name, options), options);
-    })
+    }),
 );
 
 try {
@@ -189,7 +189,7 @@ try {
       command: detectCommandName(argv),
       cwd: process.cwd(),
       isTTY,
-    }
+    },
   );
 
   emitRendered(rendered.content, rendered.outputPath);
@@ -205,14 +205,14 @@ function addReadOptions<T extends Command>(command: T): T {
     .addOption(
       new Option(
         "--page <number>",
-        "Return a single page of results"
-      ).argParser(parseInteger)
+        "Return a single page of results",
+      ).argParser(parseInteger),
     )
     .addOption(
       new Option(
         "--page-size <number>",
-        "Page size for structured read results"
-      ).argParser(parseInteger)
+        "Page size for structured read results",
+      ).argParser(parseInteger),
     )
     .option("--page-all", "Emit every page for structured read results");
 }
@@ -227,15 +227,15 @@ function addMutationOptions<T extends Command>(command: T): T {
     .option("--json <payload>", "Raw JSON payload for the command")
     .option(
       "--input-file <path>",
-      "Path to a JSON payload file, or '-' to read JSON from stdin"
+      "Path to a JSON payload file, or '-' to read JSON from stdin",
     )
     .option(
       "--storage-state-file <path>",
-      "Use a Playwright storage-state JSON file instead of browser auth"
+      "Use a Playwright storage-state JSON file instead of browser auth",
     )
     .option(
       "--storage-state-json <payload>",
-      "Inline Playwright storage-state JSON instead of browser auth"
+      "Inline Playwright storage-state JSON instead of browser auth",
     );
 }
 
@@ -250,21 +250,21 @@ function formatOption(): Option {
 function fieldsOption(): Option {
   return new Option(
     "--fields <mask>",
-    "Comma-separated field mask for structured output"
+    "Comma-separated field mask for structured output",
   );
 }
 
 function outputFileOption(): Option {
   return new Option(
     "--output-file <path>",
-    "Write output to a file inside the current working directory"
+    "Write output to a file inside the current working directory",
   );
 }
 
 function sanitizeOption(): Option {
   return new Option(
     "--no-sanitize",
-    "Disable response sanitization in structured output"
+    "Disable response sanitization in structured output",
   );
 }
 
@@ -272,7 +272,7 @@ function emitResult(
   result:
     | Awaited<ReturnType<typeof runStatusCommand>>
     | ReturnType<typeof runListCommand>,
-  options: OutputOptions
+  options: OutputOptions,
 ): void {
   const rendered = renderCommandResult(
     result,
@@ -280,7 +280,7 @@ function emitResult(
     {
       cwd: process.cwd(),
       isTTY,
-    }
+    },
   );
   emitRendered(rendered.content, rendered.outputPath);
 }
@@ -297,7 +297,7 @@ function emitRendered(content: string, outputPath?: string): void {
   }
 
   process.stdout.write(
-    `${JSON.stringify({ ok: true, output_path: outputPath })}\n`
+    `${JSON.stringify({ ok: true, output_path: outputPath })}\n`,
   );
 }
 
@@ -347,7 +347,7 @@ function parseInteger(value: string): number {
 }
 
 function getOptionsFromActionArgs(
-  args: unknown[]
+  args: unknown[],
 ): OutputOptions & Record<string, unknown> {
   const last = args.at(-1);
   if (last instanceof Command) {

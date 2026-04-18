@@ -1,7 +1,5 @@
 {
-  "$schema": "https://biomejs.dev/schemas/2.4.8/schema.json",
-  "extends": ["ultracite/biome/core"],
-  "root": true,
+  "extends": ["@howells/lint/biome/core"],
   "overrides": [
     {
       "includes": ["test/**"],

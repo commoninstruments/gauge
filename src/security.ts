@@ -6,6 +6,7 @@ const ENCODED_SEGMENT_RE = /%(?:2e|2f|5c|3f|23)/i;
 const PROMPT_INJECTION_RE =
   /\b(ignore (?:all |any |the )?(?:previous|prior|earlier) instructions|system prompt|developer message|tool call|function call|do not trust previous instructions|override your instructions)\b/gi;
 
+/** Structured error with machine-readable code and exit code for CLI output. */
 export class CLIError extends Error {
   code: string;
   exitCode: number;
@@ -13,7 +14,7 @@ export class CLIError extends Error {
 
   constructor(
     message: string,
-    options?: { code?: string; exitCode?: number; details?: unknown }
+    options?: { code?: string; exitCode?: number; details?: unknown },
   ) {
     super(message);
     this.name = "CLIError";
@@ -23,9 +24,10 @@ export class CLIError extends Error {
   }
 }
 
+/** Throw if the value contains path traversal, control chars, or unsafe characters. */
 export function assertSafeIdentifier(
   value: string,
-  label = "identifier"
+  label = "identifier",
 ): void {
   if (value.length === 0) {
     throw new CLIError(`${label} contains invalid characters or is empty.`, {
@@ -54,7 +56,7 @@ export function assertSafeIdentifier(
         code: "INVALID_IDENTIFIER",
         exitCode: 2,
         details: { label, value },
-      }
+      },
     );
   }
 
@@ -65,7 +67,7 @@ export function assertSafeIdentifier(
         code: "INVALID_IDENTIFIER",
         exitCode: 2,
         details: { label, value },
-      }
+      },
     );
   }
 
@@ -76,7 +78,7 @@ export function assertSafeIdentifier(
         code: "INVALID_IDENTIFIER",
         exitCode: 2,
         details: { label, value },
-      }
+      },
     );
   }
 
@@ -87,11 +89,12 @@ export function assertSafeIdentifier(
         code: "INVALID_IDENTIFIER",
         exitCode: 2,
         details: { label, value },
-      }
+      },
     );
   }
 }
 
+/** Strip control characters and redact prompt-injection patterns from a string. */
 export function sanitizeAgentText(value: string): string {
   const withoutControlChars = stripControlCharacters(value).trim();
   if (withoutControlChars.length === 0) {
@@ -100,10 +103,11 @@ export function sanitizeAgentText(value: string): string {
 
   return withoutControlChars.replace(
     PROMPT_INJECTION_RE,
-    "[redacted-potential-prompt-injection]"
+    "[redacted-potential-prompt-injection]",
   );
 }
 
+/** Recursively sanitize all strings in a value for safe agent consumption. */
 export function sanitizeForAgent<T>(value: T): T {
   if (typeof value === "string") {
     return sanitizeAgentText(value) as T;
@@ -124,6 +128,7 @@ export function sanitizeForAgent<T>(value: T): T {
   return value;
 }
 
+/** Resolve an output path, throwing if it escapes the working directory. */
 export function resolveOutputPath(cwd: string, requestedPath: string): string {
   if (containsControlCharacters(requestedPath)) {
     throw new CLIError("Output path contains control characters.", {
@@ -145,17 +150,18 @@ export function resolveOutputPath(cwd: string, requestedPath: string): string {
         code: "INVALID_OUTPUT_PATH",
         exitCode: 2,
         details: { cwd, requestedPath },
-      }
+      },
     );
   }
 
   return resolved;
 }
 
+/** Write content to a sandboxed path within the working directory. */
 export function writeSandboxedOutput(
   cwd: string,
   requestedPath: string,
-  content: string
+  content: string,
 ): string {
   const resolvedPath = resolveOutputPath(cwd, requestedPath);
   fs.mkdirSync(path.dirname(resolvedPath), { recursive: true });

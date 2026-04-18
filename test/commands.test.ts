@@ -5,7 +5,7 @@ import type { AccountUsage, UsageResponse } from "../src/types.js";
 
 function buildUsage(
   fiveHour: Partial<UsageResponse["five_hour"]> | null,
-  sevenDay: Partial<UsageResponse["seven_day"]> | null
+  sevenDay: Partial<UsageResponse["seven_day"]> | null,
 ): UsageResponse {
   return {
     five_hour: fiveHour as UsageResponse["five_hour"],
@@ -28,7 +28,7 @@ test("pickRecommendation returns an account window for available session usage",
       orgUuid: "org-1",
       usage: buildUsage(
         { utilization: 20, resets_at: inNinetyMinutes },
-        { utilization: 10, resets_at: inNinetyMinutes }
+        { utilization: 10, resets_at: inNinetyMinutes },
       ),
     },
   ];
@@ -41,7 +41,7 @@ test("pickRecommendation returns an account window for available session usage",
 
 test("pickRecommendation returns weekly window when session has not started", () => {
   const inTwoDays = new Date(
-    Date.now() + 2 * 24 * 60 * 60 * 1000
+    Date.now() + 2 * 24 * 60 * 60 * 1000,
   ).toISOString();
   const accounts: AccountUsage[] = [
     {
@@ -50,7 +50,7 @@ test("pickRecommendation returns weekly window when session has not started", ()
       orgUuid: "org-2",
       usage: buildUsage(
         { utilization: 0, resets_at: null },
-        { utilization: 14, resets_at: inTwoDays }
+        { utilization: 14, resets_at: inTwoDays },
       ),
     },
   ];

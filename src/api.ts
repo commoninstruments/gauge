@@ -40,9 +40,10 @@ const LOGIN_TIMEOUT_MS = 300_000;
 const USER_AGENT =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36";
 
+/** Open a Chrome browser for the user to log in and persist the session. */
 export async function addAccount(
   name: string,
-  options: { quiet?: boolean } = {}
+  options: { quiet?: boolean } = {},
 ): Promise<boolean> {
   assertChromeInstalled();
   const profileDir = getProfileDir(name);
@@ -53,10 +54,10 @@ export async function addAccount(
   if (!quiet) {
     console.log(`\nOpening browser for account "${name}"...`);
     console.log(
-      "Please log in to Claude. The browser will close automatically when done."
+      "Please log in to Claude. The browser will close automatically when done.",
     );
     console.log(
-      "(If Cloudflare blocks you, try logging in first in your regular Chrome)\n"
+      "(If Cloudflare blocks you, try logging in first in your regular Chrome)\n",
     );
   }
 
@@ -99,7 +100,7 @@ export async function addAccount(
   } catch {
     if (!quiet) {
       console.error(
-        "Login verification failed. Please make sure you're logged in."
+        "Login verification failed. Please make sure you're logged in.",
       );
     }
     await context.close();
@@ -114,8 +115,9 @@ export async function addAccount(
   return true;
 }
 
+/** Fetch usage data for a single account, falling back to browser if the API request fails. */
 export async function fetchUsageForAccount(
-  name: string
+  name: string,
 ): Promise<AccountUsage> {
   const profileDir = getProfileDir(name);
   const storagePath = getStorageStatePath(name);
@@ -168,11 +170,11 @@ export async function fetchUsageForAccount(
     }
 
     const orgs = await fetchOrganizationsFromPage(page);
-    if (!orgs || orgs.length === 0) {
+    const org = orgs?.[0];
+    if (!org) {
       throw new Error("No organizations found");
     }
 
-    const org = orgs[0];
     const plan = derivePlan(org);
 
     const usageResponse = await fetchUsageFromPage(page, org.uuid);
@@ -206,9 +208,10 @@ export async function fetchUsageForAccount(
   }
 }
 
+/** Fetch usage data for multiple accounts sequentially. */
 export async function fetchAllUsage(
   accountNames: string[],
-  options: { quiet?: boolean } = {}
+  options: { quiet?: boolean } = {},
 ): Promise<AccountUsage[]> {
   // Fetch sequentially - parallel would open too many browser windows
   const results: AccountUsage[] = [];
@@ -232,7 +235,7 @@ export async function fetchAllUsage(
 
 async function waitForLoginSignal(
   page: Page,
-  timeoutMs: number
+  timeoutMs: number,
 ): Promise<boolean> {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
@@ -282,11 +285,11 @@ async function fetchOrganizationsFromPage(page: Page): Promise<Organization[]> {
 
 async function fetchUsageFromPage(
   page: Page,
-  uuid: string
+  uuid: string,
 ): Promise<UsageResponse> {
   const usageResponse = await page.evaluate(async (orgUuid: string) => {
     const res = await fetch(
-      `https://claude.ai/api/organizations/${encodeURIComponent(orgUuid)}/usage`
+      `https://claude.ai/api/organizations/${encodeURIComponent(orgUuid)}/usage`,
     );
     if (!res.ok) {
       throw new Error(`HTTP ${res.status}`);
@@ -308,7 +311,7 @@ function expiredError(name: string): AccountUsage {
 
 function checkResponse(
   name: string,
-  res: APIResponse
+  res: APIResponse,
 ): AccountUsage | null | "ok" {
   if (res.status() === 401) {
     return expiredError(name);
@@ -322,7 +325,7 @@ function checkResponse(
 
 async function fetchUsageViaRequest(
   name: string,
-  storagePath: string
+  storagePath: string,
 ): Promise<AccountUsage | null> {
   if (!fs.existsSync(storagePath)) {
     return null;
@@ -345,7 +348,8 @@ async function fetchUsageViaRequest(
     }
 
     const orgs = (await orgsRes.json()) as Organization[];
-    if (!orgs || orgs.length === 0) {
+    const org = orgs?.[0];
+    if (!org) {
       return {
         name,
         plan: "unknown",
@@ -355,11 +359,10 @@ async function fetchUsageViaRequest(
       };
     }
 
-    const org = orgs[0];
     const plan = derivePlan(org);
 
     const usageRes = await api.get(
-      `/api/organizations/${encodeURIComponent(org.uuid)}/usage`
+      `/api/organizations/${encodeURIComponent(org.uuid)}/usage`,
     );
     const usageCheck = checkResponse(name, usageRes);
     if (usageCheck !== "ok") {

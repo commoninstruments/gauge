@@ -1,11 +1,6 @@
 {
+  "extends": "@howells/typescript-config/tsc-no-dom-app",
   "compilerOptions": {
-    "target": "ES2022",
-    "module": "ESNext",
-    "moduleResolution": "bundler",
-    "strict": true,
-    "esModuleInterop": true,
-    "skipLibCheck": true,
     "outDir": "./dist",
     "rootDir": "./src",
     "declaration": true

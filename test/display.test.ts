@@ -26,7 +26,7 @@ function stripAnsi(input: string): string {
 
 function buildUsage(
   fiveHour: Partial<UsageResponse["five_hour"]>,
-  sevenDay: Partial<UsageResponse["seven_day"]>
+  sevenDay: Partial<UsageResponse["seven_day"]>,
 ): UsageResponse {
   return {
     five_hour: fiveHour as UsageResponse["five_hour"],
@@ -43,10 +43,10 @@ function buildUsage(
 test("displayUsageTable shows card layout with metrics and status", () => {
   const now = new Date();
   const inThirtyMinutes = new Date(
-    now.getTime() + 30 * 60 * 1000
+    now.getTime() + 30 * 60 * 1000,
   ).toISOString();
   const inTwoDays = new Date(
-    now.getTime() + 2 * 24 * 60 * 60 * 1000
+    now.getTime() + 2 * 24 * 60 * 60 * 1000,
   ).toISOString();
 
   const accounts: AccountUsage[] = [
@@ -56,7 +56,7 @@ test("displayUsageTable shows card layout with metrics and status", () => {
       orgUuid: "org-1",
       usage: buildUsage(
         { utilization: 40, resets_at: inThirtyMinutes },
-        { utilization: 70, resets_at: inTwoDays }
+        { utilization: 70, resets_at: inTwoDays },
       ),
     },
     {
@@ -65,7 +65,7 @@ test("displayUsageTable shows card layout with metrics and status", () => {
       orgUuid: "org-2",
       usage: buildUsage(
         { utilization: 100, resets_at: inThirtyMinutes },
-        { utilization: 20, resets_at: inTwoDays }
+        { utilization: 20, resets_at: inTwoDays },
       ),
     },
     {
@@ -74,7 +74,7 @@ test("displayUsageTable shows card layout with metrics and status", () => {
       orgUuid: "org-3",
       usage: buildUsage(
         { utilization: 20, resets_at: inThirtyMinutes },
-        { utilization: 100, resets_at: inTwoDays }
+        { utilization: 100, resets_at: inTwoDays },
       ),
     },
   ];
@@ -111,10 +111,10 @@ test("displayUsageTable shows card layout with metrics and status", () => {
 test("displayUsageTable sorts available accounts first", () => {
   const now = new Date();
   const inThirtyMinutes = new Date(
-    now.getTime() + 30 * 60 * 1000
+    now.getTime() + 30 * 60 * 1000,
   ).toISOString();
   const inTwoDays = new Date(
-    now.getTime() + 2 * 24 * 60 * 60 * 1000
+    now.getTime() + 2 * 24 * 60 * 60 * 1000,
   ).toISOString();
 
   const accounts: AccountUsage[] = [
@@ -124,7 +124,7 @@ test("displayUsageTable sorts available accounts first", () => {
       orgUuid: "org-1",
       usage: buildUsage(
         { utilization: 100, resets_at: inThirtyMinutes },
-        { utilization: 100, resets_at: inTwoDays }
+        { utilization: 100, resets_at: inTwoDays },
       ),
     },
     {
@@ -133,7 +133,7 @@ test("displayUsageTable sorts available accounts first", () => {
       orgUuid: "org-2",
       usage: buildUsage(
         { utilization: 10, resets_at: inThirtyMinutes },
-        { utilization: 10, resets_at: inTwoDays }
+        { utilization: 10, resets_at: inTwoDays },
       ),
     },
   ];
@@ -145,7 +145,7 @@ test("displayUsageTable sorts available accounts first", () => {
   const blockedPos = output.indexOf("blocked-first");
   assert.ok(
     availPos < blockedPos,
-    "Available account should appear before blocked account"
+    "Available account should appear before blocked account",
   );
 });
 
@@ -203,7 +203,7 @@ test("displayUsageTable shows all non-null metrics", () => {
 test("displayQuickRecommendation prefers available accounts", () => {
   const now = new Date();
   const inThirtyMinutes = new Date(
-    now.getTime() + 30 * 60 * 1000
+    now.getTime() + 30 * 60 * 1000,
   ).toISOString();
 
   const accounts: AccountUsage[] = [
@@ -213,7 +213,7 @@ test("displayQuickRecommendation prefers available accounts", () => {
       orgUuid: "org-1",
       usage: buildUsage(
         { utilization: 10, resets_at: inThirtyMinutes },
-        { utilization: 10, resets_at: inThirtyMinutes }
+        { utilization: 10, resets_at: inThirtyMinutes },
       ),
     },
     {
@@ -222,13 +222,13 @@ test("displayQuickRecommendation prefers available accounts", () => {
       orgUuid: "org-2",
       usage: buildUsage(
         { utilization: 100, resets_at: inThirtyMinutes },
-        { utilization: 100, resets_at: inThirtyMinutes }
+        { utilization: 100, resets_at: inThirtyMinutes },
       ),
     },
   ];
 
   const output = stripAnsi(
-    captureOutput(() => displayQuickRecommendation(accounts))
+    captureOutput(() => displayQuickRecommendation(accounts)),
   );
 
   assert.match(output, /available/);
@@ -246,7 +246,7 @@ test("displayUsageTable shows specific Max tier badges", () => {
       orgUuid: "org-1",
       usage: buildUsage(
         { utilization: 10, resets_at: future },
-        { utilization: 20, resets_at: future }
+        { utilization: 20, resets_at: future },
       ),
     },
     {
@@ -255,7 +255,7 @@ test("displayUsageTable shows specific Max tier badges", () => {
       orgUuid: "org-2",
       usage: buildUsage(
         { utilization: 30, resets_at: future },
-        { utilization: 40, resets_at: future }
+        { utilization: 40, resets_at: future },
       ),
     },
   ];

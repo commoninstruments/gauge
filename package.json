@@ -23,7 +23,8 @@
     "start": "node dist/cli.js",
     "test": "tsx --test test/**/*.test.ts",
     "prepublishOnly": "npm run build",
-    "lint": "biome check .",
+    "lint": "howells-lint",
+    "format": "howells-format",
     "typecheck": "tsc --noEmit",
     "prepare": "husky"
   },
@@ -33,12 +34,12 @@
     "playwright-core": "^1.49.0"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.4.8",
+    "@howells/lint": "*",
+    "@howells/typescript-config": "*",
     "@types/node": "^22.10.0",
     "husky": "9.1.7",
     "tsx": "^4.19.0",
     "typescript": "^5.9.3",
-    "ultracite": "7.3.2",
     "lint-staged": "^16.4.0"
   },
   "engines": {
@@ -46,6 +47,6 @@
   },
   "packageManager": "pnpm@10.15.1",
   "lint-staged": {
-    "*.{js,ts,jsx,tsx,json,jsonc,css}": "biome format --write --no-errors-on-unmatched"
+    "*.{js,ts,jsx,tsx,json,jsonc,css}": "howells-format"
   }
 }

@@ -66,7 +66,7 @@ function getAvailability(account: AccountUsage): Availability {
   if (weekly && weekly.utilization >= 100) {
     const waitMs = Math.max(
       0,
-      new Date(weekly.resets_at).getTime() - Date.now()
+      new Date(weekly.resets_at).getTime() - Date.now(),
     );
     return {
       status: waitMs <= 0 ? "available" : "wait",
@@ -79,7 +79,7 @@ function getAvailability(account: AccountUsage): Availability {
   if (session && session.utilization >= 100) {
     const waitMs = Math.max(
       0,
-      new Date(session.resets_at).getTime() - Date.now()
+      new Date(session.resets_at).getTime() - Date.now(),
     );
     return {
       status: waitMs <= 0 ? "available" : "wait",
@@ -131,8 +131,9 @@ function getActiveMetrics(usage: AccountUsage["usage"]): ActiveMetric[] {
   const metrics: ActiveMetric[] = [];
   for (const key of METRIC_KEYS) {
     const limit = usage[key as keyof typeof usage];
-    if (limit && typeof limit === "object" && "utilization" in limit) {
-      metrics.push({ label: METRIC_LABELS[key], limit: limit as UsageLimit });
+    const label = METRIC_LABELS[key];
+    if (label && limit && typeof limit === "object" && "utilization" in limit) {
+      metrics.push({ label, limit: limit as UsageLimit });
     }
   }
   return metrics;
@@ -192,7 +193,7 @@ const SEPARATOR = "╌".repeat(CARD_WIDTH);
 
 function formatAccountCard(
   account: AccountUsage,
-  availability: Availability
+  availability: Availability,
 ): string {
   const lines: string[] = [];
 
@@ -277,7 +278,7 @@ function pickNextAccount(accounts: AccountUsage[]): {
   }));
 
   const usable = scored.filter(
-    (entry) => entry.availability.status === "available"
+    (entry) => entry.availability.status === "available",
   );
   if (usable.length > 0) {
     return usable.reduce((a, b) => (a.score <= b.score ? a : b));
@@ -311,23 +312,25 @@ function formatRecommendationWindow(account: AccountUsage): string | null {
   return null;
 }
 
+/** Print the full usage dashboard to stdout. */
 export function displayUsageTable(accounts: AccountUsage[]): void {
   console.log(formatUsageTable(accounts));
 }
 
+/** Format the full usage dashboard as a string with ANSI colors. */
 export function formatUsageTable(accounts: AccountUsage[]): string {
   const sorted = sortByRecommendation(accounts);
 
   // Fleet summary
   const total = accounts.length;
   const availableCount = sorted.filter(
-    (s) => s.availability.status === "available"
+    (s) => s.availability.status === "available",
   ).length;
   const nonError = sorted.filter((s) => s.availability.status !== "error");
   const avgLoad =
     nonError.length > 0
       ? Math.round(
-          nonError.reduce((sum, s) => sum + s.score / 2, 0) / nonError.length
+          nonError.reduce((sum, s) => sum + s.score / 2, 0) / nonError.length,
         )
       : 0;
 
@@ -336,8 +339,8 @@ export function formatUsageTable(accounts: AccountUsage[]): string {
   lines.push(chalk.bold("  Claude Usage Dashboard"));
   lines.push(
     chalk.gray(
-      `  ${total} account${total === 1 ? "" : "s"} · ${availableCount} available · ${avgLoad}% avg load`
-    )
+      `  ${total} account${total === 1 ? "" : "s"} · ${availableCount} available · ${avgLoad}% avg load`,
+    ),
   );
 
   // Account cards
@@ -356,8 +359,8 @@ export function formatUsageTable(accounts: AccountUsage[]): string {
     const timeWindow = formatRecommendationWindow(next.account);
     lines.push(
       `  ${chalk.cyan("→")} Best: ${chalk.bold(next.account.name)} ${chalk.gray(
-        `(${timeWindow ? `${label}, ${timeWindow}` : label})`
-      )}`
+        `(${timeWindow ? `${label}, ${timeWindow}` : label})`,
+      )}`,
     );
   }
 
@@ -365,10 +368,12 @@ export function formatUsageTable(accounts: AccountUsage[]): string {
   return lines.join("\n");
 }
 
+/** Print a one-line recommendation to stdout. */
 export function displayQuickRecommendation(accounts: AccountUsage[]): void {
   console.log(formatQuickRecommendation(accounts));
 }
 
+/** Format a one-line recommendation string for the best available account. */
 export function formatQuickRecommendation(accounts: AccountUsage[]): string {
   const next = pickNextAccount(accounts);
   if (!next) {

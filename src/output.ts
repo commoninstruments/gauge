@@ -41,9 +41,10 @@ interface RenderedOutput {
   outputPath?: string;
 }
 
+/** Determine the output format, defaulting to JSON for non-TTY and human for TTY. */
 export function resolveOutputFormat(
   requestedFormat: string | undefined,
-  isTTY = process.stdout.isTTY ?? false
+  isTTY = process.stdout.isTTY ?? false,
 ): OutputFormat {
   if (
     requestedFormat === "human" ||
@@ -56,6 +57,7 @@ export function resolveOutputFormat(
   return isTTY ? "human" : "json";
 }
 
+/** Parse a comma-separated field mask string into path segments. */
 export function parseFieldMask(fields: string | undefined): string[][] {
   if (!fields || fields.trim().length === 0 || fields.trim() === "*") {
     return [];
@@ -68,6 +70,7 @@ export function parseFieldMask(fields: string | undefined): string[][] {
     .map((field) => field.split(".").filter(Boolean));
 }
 
+/** Project a value down to only the paths specified by the field mask. */
 export function applyFieldMask<T>(value: T, fields: string | undefined): T {
   const mask = parseFieldMask(fields);
   if (mask.length === 0) {
@@ -96,14 +99,15 @@ function maskValue(value: unknown, mask: string[][]): unknown {
 function assignPath(
   target: Record<string, unknown>,
   source: Record<string, unknown>,
-  path: string[]
+  path: string[],
 ): void {
   if (path.length === 0) {
     return;
   }
 
-  const [segment, ...rest] = path;
-  if (!(segment in source)) {
+  const segment = path[0];
+  const rest = path.slice(1);
+  if (!segment || !(segment in source)) {
     return;
   }
 
@@ -137,18 +141,19 @@ function assignPath(
   target[segment] = nestedTarget;
 }
 
+/** Split items into page payloads for structured output. */
 export function paginateItems(
   items: unknown[],
   options: { page?: number; pageAll?: boolean; pageSize?: number },
   itemName: string,
-  summary?: Record<string, unknown>
+  summary?: Record<string, unknown>,
 ): PagePayload[] {
   const pageSize = Math.max(1, options.pageSize ?? items.length ?? 1);
   const totalPages = Math.max(1, Math.ceil(items.length / pageSize));
 
   if (options.pageAll) {
     return Array.from({ length: totalPages }, (_, index) =>
-      buildPage(items, itemName, summary, index + 1, pageSize, totalPages)
+      buildPage(items, itemName, summary, index + 1, pageSize, totalPages),
     );
   }
 
@@ -162,7 +167,7 @@ function buildPage(
   summary: Record<string, unknown> | undefined,
   page: number,
   pageSize: number,
-  totalPages: number
+  totalPages: number,
 ): PagePayload {
   const start = (page - 1) * pageSize;
   const pageItems = items.slice(start, start + pageSize);
@@ -180,10 +185,11 @@ function buildPage(
   };
 }
 
+/** Render a command result to the appropriate format with optional file output. */
 export function renderCommandResult(
   result: CommandResult,
   options: OutputOptions,
-  context: { cwd: string; isTTY?: boolean }
+  context: { cwd: string; isTTY?: boolean },
 ): RenderedOutput {
   const format = resolveOutputFormat(options.format, context.isTTY);
   const sanitize = options.sanitize ?? true;
@@ -193,7 +199,7 @@ export function renderCommandResult(
       result.human,
       format,
       options.outputFile,
-      context.cwd
+      context.cwd,
     );
   }
 
@@ -206,7 +212,7 @@ export function renderCommandResult(
           pageSize: options.pageSize,
         },
         result.paginated.itemName,
-        result.paginated.summary
+        result.paginated.summary,
       )
     : [
         {
@@ -225,12 +231,12 @@ export function renderCommandResult(
       result.command,
       applyFieldMask(
         sanitize ? sanitizeForAgent(page.data) : page.data,
-        options.fields
+        options.fields,
       ),
       page.page_info,
       result.dryRun ?? false,
-      sanitize
-    )
+      sanitize,
+    ),
   );
 
   const content =
@@ -245,17 +251,18 @@ export function renderCommandResult(
                 meta: structuredPages[0]?.meta,
               },
           null,
-          2
+          2,
         )}\n`
       : `${structuredPages.map((page) => JSON.stringify(page)).join("\n")}\n`;
 
   return writeMaybeToFile(content, format, options.outputFile, context.cwd);
 }
 
+/** Render an error to the appropriate format with optional file output. */
 export function renderError(
   error: { code?: string; message: string; details?: unknown },
   options: OutputOptions,
-  context: { cwd: string; isTTY?: boolean; command: string }
+  context: { cwd: string; isTTY?: boolean; command: string },
 ): RenderedOutput {
   const format = resolveOutputFormat(options.format, context.isTTY);
   if (format === "human") {
@@ -263,7 +270,7 @@ export function renderError(
       `${error.message}\n`,
       format,
       options.outputFile,
-      context.cwd
+      context.cwd,
     );
   }
 
@@ -296,7 +303,7 @@ function buildEnvelope(
   data: unknown,
   pageInfo: PagePayload["page_info"],
   dryRun: boolean,
-  sanitized: boolean
+  sanitized: boolean,
 ): Record<string, unknown> {
   return {
     ok: true,
@@ -316,7 +323,7 @@ function writeMaybeToFile(
   content: string,
   format: OutputFormat,
   outputFile: string | undefined,
-  cwd: string
+  cwd: string,
 ): RenderedOutput {
   if (!outputFile) {
     return { content, format };

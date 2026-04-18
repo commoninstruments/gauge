@@ -6,6 +6,7 @@ import { ensureDataDir, getDataDir } from "./paths.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const LEGACY_DIR = path.join(__dirname, "..", "accounts");
 
+/** Copy legacy account data from the old bundled directory to ~/.claudeusage if needed. */
 export function migrateIfNeeded(): boolean {
   if (!fs.existsSync(LEGACY_DIR)) {
     return false;

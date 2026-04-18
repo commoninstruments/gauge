@@ -14,6 +14,7 @@ import {
 } from "./storage-state.js";
 import type { AccountConfig } from "./types.js";
 
+/** Return all saved accounts sorted by name. */
 export function listAccounts(): AccountConfig[] {
   ensureDataDir();
   const dir = getDataDir();
@@ -27,10 +28,12 @@ export function listAccounts(): AccountConfig[] {
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
+/** Check whether a named account config file exists on disk. */
 export function accountExists(name: string): boolean {
   return fs.existsSync(getAccountPath(name));
 }
 
+/** Persist a new account config to the data directory. */
 export function saveAccount(name: string): void {
   ensureDataDir();
   const config: AccountConfig = {
@@ -42,9 +45,10 @@ export function saveAccount(name: string): void {
   lockFile(accountPath);
 }
 
+/** Import a Playwright storage-state from JSON string or file path. */
 export function importStorageState(
   name: string,
-  options: { json?: string; filePath?: string }
+  options: { json?: string; filePath?: string },
 ): string {
   ensureDataDir();
   const normalized =
@@ -57,6 +61,7 @@ export function importStorageState(
   return storagePath;
 }
 
+/** Return the file paths for all local artifacts belonging to an account. */
 export function getAccountArtifacts(name: string): {
   accountPath: string;
   storagePath: string;
@@ -69,6 +74,7 @@ export function getAccountArtifacts(name: string): {
   };
 }
 
+/** List accounts with flags indicating which local auth artifacts exist. */
 export function listAccountDetails(): Array<
   AccountConfig & { hasStorageState: boolean; hasProfileDir: boolean }
 > {
@@ -82,6 +88,7 @@ export function listAccountDetails(): Array<
   });
 }
 
+/** Delete an account and all its local artifacts. Returns false if not found. */
 export function removeAccount(name: string): boolean {
   const accountPath = getAccountPath(name);
   const storagePath = getStorageStatePath(name);

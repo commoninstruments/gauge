@@ -209,8 +209,9 @@ const COMMAND_SCHEMAS: CommandSchema[] = [
   },
 ];
 
+/** Return the runtime schema for all (or a specific) CLI command. */
 export function describeCommands(
-  commandName?: string
+  commandName?: string,
 ): Record<string, unknown> {
   const commands = commandName
     ? COMMAND_SCHEMAS.filter((command) => command.command === commandName)

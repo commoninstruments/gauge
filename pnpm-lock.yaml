@@ -22,8 +22,8 @@ importers:
         specifier: '*'
         version: 0.1.3
       '@howells/typescript-config':
-        specifier: '*'
-        version: 0.1.0
+        specifier: ^0.1.2
+        version: 0.1.2
       '@types/node':
         specifier: ^22.10.0
         version: 22.19.7
@@ -261,8 +261,8 @@ packages:
     resolution: {integrity: sha512-eElg6Tb+38HD0jX12seTycTbsDDLK84aNvSfQ9i+p8QFvYLU8EbwrMysCaPVJnC8VxfdRKH2AspuLffHCR3KqQ==}
     hasBin: true
 
-  '@howells/typescript-config@0.1.0':
-    resolution: {integrity: sha512-fpbV6JZ0Gowq1Q2Il6hY2OaXwc6utRpc1AUSljlDhqZoUF6glJ7GTqFe8HU5Xiq2kEgA6SWI9cA7g0msvLL3og==}
+  '@howells/typescript-config@0.1.2':
+    resolution: {integrity: sha512-e5tVanVFR+FqaP776BMRwuQtWBbv7gMopaZQbDjHz3Lo9uATbQ4cq8qqBklM28Uszg7l6gLYzmi/7nqGGim2kw==}
 
   '@total-typescript/tsconfig@1.0.4':
     resolution: {integrity: sha512-fO4ctMPGz1kOFOQ4RCPBRBfMy3gDn+pegUfrGyUFRMv/Rd0ZM3/SHH3hFCYG4u6bPLG8OlmOGcBLDexvyr3A5w==}
@@ -667,7 +667,7 @@ snapshots:
       - oxfmt
       - oxlint
 
-  '@howells/typescript-config@0.1.0':
+  '@howells/typescript-config@0.1.2':
     dependencies:
       '@total-typescript/tsconfig': 1.0.4
 

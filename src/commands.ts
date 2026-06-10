@@ -8,7 +8,12 @@ import {
   saveAccount,
 } from "./accounts.js";
 import { addAccount, fetchAllUsage } from "./api.js";
-import { formatQuickRecommendation, formatUsageTable } from "./display.js";
+import { fetchCodexAccounts, fetchCursorAccounts } from "./codexbar.js";
+import {
+  claudeToUnified,
+  formatDashboard,
+} from "./display.js";
+import type { UnifiedAccount } from "./types.js";
 import type { CommandResult, OutputOptions } from "./output.js";
 import { describeCommands } from "./schema.js";
 import { CLIError } from "./security.js";
@@ -45,71 +50,58 @@ interface RecommendationWindow {
 export async function runStatusCommand(
   options: CommandOptions,
 ): Promise<CommandResult> {
-  const accounts = listAccountDetails();
-  if (accounts.length === 0) {
-    const data = {
-      accounts: [],
-      recommendation: null,
-      summary: {
-        total_accounts: 0,
-        available_accounts: 0,
-      },
-    };
+  const quiet = options.quiet ?? false;
+
+  // Codex + Cursor via codexbar (fast, synchronous)
+  if (!quiet) process.stdout.write("  Fetching codex...\n");
+  const codexAccounts = fetchCodexAccounts();
+
+  if (!quiet) process.stdout.write("  Fetching cursor...\n");
+  const cursorAccounts = fetchCursorAccounts();
+
+  // Claude via Playwright (sequential per account)
+  const claudeConfigs = listAccountDetails();
+  const claudeRaw =
+    claudeConfigs.length > 0
+      ? await fetchAllUsage(
+          claudeConfigs.map((a) => a.name),
+          { quiet },
+        )
+      : [];
+  const claudeAccounts = claudeRaw.map(claudeToUnified);
+
+  const groups = {
+    ...(claudeAccounts.length > 0 && { claude: claudeAccounts }),
+    ...(codexAccounts.length > 0 && { codex: codexAccounts }),
+    ...(cursorAccounts.length > 0 && { cursor: cursorAccounts }),
+  };
+
+  const allAccounts = [
+    ...claudeAccounts,
+    ...codexAccounts,
+    ...cursorAccounts,
+  ];
+  const statusAccounts = allAccounts.map(addStatusNameAlias);
+  const statusGroups = mapStatusGroups(groups);
+  const recommendation =
+    claudeRaw.length > 0 ? pickRecommendation(claudeRaw) : null;
+
+  if (allAccounts.length === 0) {
     return {
       command: "status",
-      data,
-      human:
-        "\nNo accounts configured.\nAdd one with: claudeusage add <name>\n",
+      data: { accounts: [], recommendation: null },
+      human: "\nNo accounts configured.\nAdd one with: gauge add <name>\n",
     };
   }
 
-  const usage = await fetchAllUsage(
-    accounts.map((account) => account.name),
-    { quiet: options.quiet },
-  );
-  const recommendation = pickRecommendation(usage);
-  const availableAccounts = usage.filter((account) => {
-    if (account.error) {
-      return false;
-    }
-    return (
-      (account.usage.five_hour?.utilization ?? 0) < 100 &&
-      (account.usage.seven_day?.utilization ?? 0) < 100
-    );
-  }).length;
-
-  const data = options.quick
-    ? {
-        recommendation,
-      }
-    : {
-        accounts: usage,
-        recommendation,
-        summary: {
-          total_accounts: usage.length,
-          available_accounts: availableAccounts,
-        },
-      };
-
   return {
     command: "status",
-    data,
-    human: options.quick
-      ? `${formatQuickRecommendation(usage)}\n`
-      : `${formatUsageTable(usage)}\n`,
-    paginated: options.quick
-      ? undefined
-      : {
-          itemName: "accounts",
-          items: usage,
-          summary: {
-            recommendation,
-            summary: {
-              total_accounts: usage.length,
-              available_accounts: availableAccounts,
-            },
-          },
-        },
+    data: {
+      accounts: statusAccounts,
+      groups: statusGroups,
+      recommendation,
+    },
+    human: formatDashboard(groups),
   };
 }
 
@@ -118,7 +110,7 @@ export function runListCommand(): CommandResult {
   const accounts = listAccountDetails();
   const human =
     accounts.length === 0
-      ? "\nNo accounts configured.\nAdd one with: claudeusage add <name>\n"
+      ? "\nNo accounts configured.\nAdd one with: gauge add <name>\n"
       : `\nConfigured accounts:\n${accounts
           .map((account) => `  • ${account.name}`)
           .join("\n")}\n`;
@@ -166,7 +158,7 @@ export async function runAddCommand(
     throw new CLIError(`Account "${payload.name}" already exists.`, {
       code: "ACCOUNT_EXISTS",
       exitCode: 2,
-      details: { hint: `Use claudeusage refresh ${payload.name}` },
+      details: { hint: `Use gauge refresh ${payload.name}` },
     });
   }
 
@@ -237,7 +229,7 @@ export async function runRefreshCommand(
     throw new CLIError(`Account "${payload.name}" not found.`, {
       code: "ACCOUNT_NOT_FOUND",
       exitCode: 2,
-      details: { hint: `Use claudeusage add ${payload.name}` },
+      details: { hint: `Use gauge add ${payload.name}` },
     });
   }
 
@@ -354,7 +346,7 @@ function resolveMutationPayload(
     storage_state_json:
       normalizeStorageStateJson(
         rawPayload?.storage_state_json ?? options.storageStateJson,
-      ) ?? process.env.CLAUDEUSAGE_STORAGE_STATE_JSON,
+      ) ?? getStorageStateJsonEnv(),
   };
 }
 
@@ -389,17 +381,31 @@ function resolveStorageStateMode(
   const filePath =
     payload.storage_state_file ??
     options.storageStateFile ??
-    process.env.CLAUDEUSAGE_STORAGE_STATE_FILE;
+    getStorageStateFileEnv();
   const json =
     normalizeStorageStateJson(payload.storage_state_json) ??
     normalizeStorageStateJson(options.storageStateJson) ??
-    process.env.CLAUDEUSAGE_STORAGE_STATE_JSON;
+    getStorageStateJsonEnv();
 
   if (!(filePath || json)) {
     return null;
   }
 
   return { filePath, json };
+}
+
+function getStorageStateFileEnv(): string | undefined {
+  return (
+    process.env.GAUGE_STORAGE_STATE_FILE ??
+    process.env.CLAUDEUSAGE_STORAGE_STATE_FILE
+  );
+}
+
+function getStorageStateJsonEnv(): string | undefined {
+  return (
+    process.env.GAUGE_STORAGE_STATE_JSON ??
+    process.env.CLAUDEUSAGE_STORAGE_STATE_JSON
+  );
 }
 
 function normalizeStorageStateJson(value: unknown): string | undefined {
@@ -467,6 +473,27 @@ function pickRecommendation(
     },
     status: best.blocked ? "wait" : "use_now",
   };
+}
+
+function addStatusNameAlias(account: UnifiedAccount): UnifiedAccount & {
+  name: string;
+} {
+  return {
+    ...account,
+    name: account.label,
+  };
+}
+
+function mapStatusGroups(
+  groups: Partial<Record<string, UnifiedAccount[]>>,
+): Partial<Record<string, Array<UnifiedAccount & { name: string }>>> {
+  const result: Partial<Record<string, Array<UnifiedAccount & { name: string }>>> =
+    {};
+  for (const [provider, accounts] of Object.entries(groups)) {
+    if (!accounts) continue;
+    result[provider] = accounts.map(addStatusNameAlias);
+  }
+  return result;
 }
 
 function getRecommendationWindow(

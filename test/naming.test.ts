@@ -11,17 +11,17 @@ function readJson(filePath: string): Record<string, any> {
   return JSON.parse(fs.readFileSync(filePath, "utf-8"));
 }
 
-test("package.json uses scoped claudeusage name and bin", () => {
+test("package.json uses scoped gauge name and bin", () => {
   const pkg = readJson(path.join(root, "package.json"));
-  assert.equal(pkg.name, "@howells/claudeusage");
-  assert.ok(pkg.bin?.claudeusage);
+  assert.equal(pkg.name, "@howells/gauge");
+  assert.ok(pkg.bin?.gauge);
 });
 
-test("CLI help text references claudeusage", () => {
+test("CLI help text references gauge", () => {
   const cliPath = path.join(root, "src", "cli.ts");
   const cliSource = fs.readFileSync(cliPath, "utf-8");
-  assert.match(cliSource, /\.name\("claudeusage"\)/);
-  assert.match(cliSource, /claudeusage add/);
+  assert.match(cliSource, /\.name\("gauge"\)/);
+  assert.match(cliSource, /gauge add/);
 });
 
 test("package ships dist and builds before publish", () => {

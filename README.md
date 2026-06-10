@@ -1,6 +1,6 @@
-# claudeusage
+# gauge
 
-Agent-first CLI to check Claude usage across multiple accounts.
+Agent-first CLI to check AI usage across multiple accounts.
 
 ## Features
 
@@ -22,23 +22,23 @@ Agent-first CLI to check Claude usage across multiple accounts.
 ## Install
 
 ```bash
-npx @howells/claudeusage@latest
+npx @howells/gauge@latest
 ```
 
 ```bash
-npm install -g @howells/claudeusage
-claudeusage
+npm install -g @howells/gauge
+gauge
 ```
 
 ## Human Usage
 
 ```bash
-claudeusage
-claudeusage --quick
-claudeusage list
-claudeusage add personal
-claudeusage refresh personal
-claudeusage remove personal --dry-run
+gauge
+gauge --quick
+gauge list
+gauge add personal
+gauge refresh personal
+gauge remove personal --dry-run
 ```
 
 ## Agent Usage
@@ -46,33 +46,33 @@ claudeusage remove personal --dry-run
 Inspect the runtime schema first:
 
 ```bash
-claudeusage describe --format json
+gauge describe --format json
 ```
 
 Use structured output with field masks:
 
 ```bash
-claudeusage status --format json \
-  --fields recommendation.account.name,summary.available_accounts
+gauge status --format json \
+  --fields recommendation.account.name,accounts.name
 ```
 
 Stream paginated reads as NDJSON:
 
 ```bash
-claudeusage list --format ndjson --page-size 1 --page-all
+gauge list --format ndjson --page-size 1 --page-all
 ```
 
 Pass raw payloads directly:
 
 ```bash
-claudeusage add --json '{"name":"personal","storage_state_file":"./state.json"}' --format json
-claudeusage refresh --input-file payload.json --dry-run --format json
+gauge add --json '{"name":"personal","storage_state_file":"./state.json"}' --format json
+gauge refresh --input-file payload.json --dry-run --format json
 ```
 
 Write output to a sandboxed file inside the current working directory:
 
 ```bash
-claudeusage describe --format json --output-file ./artifacts/claudeusage-schema.json
+gauge describe --format json --output-file ./artifacts/gauge-schema.json
 ```
 
 ## Headless Auth
@@ -80,19 +80,20 @@ claudeusage describe --format json --output-file ./artifacts/claudeusage-schema.
 Import Playwright storage state without opening Chrome:
 
 ```bash
-claudeusage add --json '{"name":"personal","storage_state_file":"./state.json"}'
+gauge add --json '{"name":"personal","storage_state_file":"./state.json"}'
 ```
 
-You can also use environment variables:
+You can also use environment variables. The old `CLAUDEUSAGE_*` names are
+still accepted as fallbacks for existing automation.
 
 ```bash
-export CLAUDEUSAGE_STORAGE_STATE_FILE=./state.json
-claudeusage add personal --format json
+export GAUGE_STORAGE_STATE_FILE=./state.json
+gauge add personal --format json
 ```
 
 ```bash
-export CLAUDEUSAGE_STORAGE_STATE_JSON='{"cookies":[],"origins":[]}'
-claudeusage refresh personal --dry-run --format json
+export GAUGE_STORAGE_STATE_JSON='{"cookies":[],"origins":[]}'
+gauge refresh personal --dry-run --format json
 ```
 
 ## Safety Posture
@@ -106,7 +107,7 @@ claudeusage refresh personal --dry-run --format json
 
 ## Local Data
 
-- Account data is stored in `~/.claudeusage/`
+- Account data is stored in `~/.gauge/`
 - Browser auth stores Playwright storage state in the same directory
 - Local files are written with restrictive permissions where supported
 

@@ -10,6 +10,7 @@ import {
   runRemoveCommand,
   runStatusCommand,
 } from "./commands.js";
+import { runTUI } from "./tui.js";
 import { migrateIfNeeded } from "./migrate.js";
 import {
   type OutputOptions,
@@ -29,9 +30,9 @@ const resolvedFormat =
 
 const program = new Command();
 program
-  .name("claudeusage")
+  .name("gauge")
   .description(
-    "Agent-first Claude usage CLI for multi-account session management",
+    "At-a-glance usage dashboard for Claude, Codex, and Cursor accounts",
   )
   .version("1.0.1")
   .showHelpAfterError(false)
@@ -56,7 +57,7 @@ program
 
 const migrated = migrateIfNeeded();
 if (migrated && resolvedFormat === "human") {
-  process.stdout.write("Migrated account data to ~/.claudeusage/\n");
+  process.stdout.write("Migrated account data to ~/.gauge/\n");
 }
 
 addReadOptions(
@@ -64,6 +65,10 @@ addReadOptions(
     .option("-q, --quick", "Just show the recommended account")
     .action(async (...args) => {
       const options = getOptionsFromActionArgs(args);
+      if (isTTY && !requestedFormat && !options.quick) {
+        await runTUI();
+        return;
+      }
       await emitResult(
         await runStatusCommand({
           ...options,
@@ -79,10 +84,14 @@ addReadOptions(
 addReadOptions(
   program
     .command("status")
-    .description("Fetch Claude usage for all configured accounts")
+    .description("Fetch AI usage for all configured accounts")
     .option("-q, --quick", "Just show the recommended account")
     .action(async (...args) => {
       const options = getOptionsFromActionArgs(args);
+      if (isTTY && !requestedFormat && !options.quick) {
+        await runTUI();
+        return;
+      }
       await emitResult(
         await runStatusCommand({
           ...options,
@@ -120,7 +129,7 @@ addMutationOptions(
   program
     .command("add [name]")
     .description("Add a new Claude account")
-    // Human hint preserved in source for packaging tests: claudeusage add <name>
+    // Human hint preserved in source for packaging tests: gauge add <name>
     .action(async (...args) => {
       const name = typeof args[0] === "string" ? args[0] : undefined;
       const options = getOptionsFromActionArgs(args);
@@ -367,7 +376,9 @@ function normalizeOutputOptions(options: OutputOptions): OutputOptions {
     pageSize:
       options.pageSize ??
       parseOptionalInteger(peekFlagValue(argv, "--page-size")),
-    sanitize: options.sanitize ?? !argv.includes("--no-sanitize"),
+    sanitize: argv.includes("--no-sanitize")
+      ? false
+      : options.sanitize ?? true,
   };
 }
 

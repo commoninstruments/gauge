@@ -28,14 +28,14 @@ test("sanitizeAgentText redacts prompt injection phrases", () => {
 });
 
 test("resolveOutputPath keeps writes inside cwd", () => {
-  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "claudeusage-output-"));
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "gauge-output-"));
   const resolved = resolveOutputPath(cwd, "./artifacts/result.json");
   assert.ok(resolved.startsWith(cwd));
   assert.throws(() => resolveOutputPath(cwd, "../escape.json"));
 });
 
 test("writeSandboxedOutput writes relative files", () => {
-  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "claudeusage-write-"));
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "gauge-write-"));
   const outputPath = writeSandboxedOutput(
     cwd,
     "./out/result.json",

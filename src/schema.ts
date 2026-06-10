@@ -47,11 +47,11 @@ const COMMAND_SCHEMAS: CommandSchema[] = [
     command: "status",
     kind: "read",
     summary:
-      "Fetch Claude usage for all configured accounts and recommend the next account.",
+      "Fetch AI usage for all configured accounts and recommend the next account.",
     examples: [
-      "claudeusage status --format json --fields recommendation.account.name,accounts.name",
-      "claudeusage --quick --format json",
-      "claudeusage status --format ndjson --page-size 1 --page-all",
+      "gauge status --format json --fields recommendation.account.name,accounts.name",
+      "gauge --quick --format json",
+      "gauge status --format ndjson --page-size 1 --page-all",
     ],
     raw_payload: {
       accepts_json_option: false,
@@ -73,8 +73,8 @@ const COMMAND_SCHEMAS: CommandSchema[] = [
     kind: "read",
     summary: "List configured accounts and local auth artifacts.",
     examples: [
-      "claudeusage list --format json",
-      "claudeusage list --format ndjson --page-size 10 --page-all",
+      "gauge list --format json",
+      "gauge list --format ndjson --page-size 10 --page-all",
     ],
     raw_payload: {
       accepts_json_option: false,
@@ -96,8 +96,8 @@ const COMMAND_SCHEMAS: CommandSchema[] = [
     kind: "read",
     summary: "Introspect the runtime command schemas and agent guardrails.",
     examples: [
-      "claudeusage describe --format json",
-      "claudeusage describe add --fields commands.command,commands.raw_payload.schema",
+      "gauge describe --format json",
+      "gauge describe add --fields commands.command,commands.raw_payload.schema",
     ],
     raw_payload: {
       accepts_json_option: false,
@@ -120,8 +120,8 @@ const COMMAND_SCHEMAS: CommandSchema[] = [
     summary:
       "Add an account via browser auth or headless storage-state import.",
     examples: [
-      "claudeusage add personal --dry-run",
-      'claudeusage add --json \'{"name":"personal","storage_state_file":"./state.json"}\' --format json',
+      "gauge add personal --dry-run",
+      'gauge add --json \'{"name":"personal","storage_state_file":"./state.json"}\' --format json',
     ],
     raw_payload: {
       accepts_json_option: true,
@@ -152,8 +152,8 @@ const COMMAND_SCHEMAS: CommandSchema[] = [
     summary:
       "Refresh an account session via browser auth or headless storage-state import.",
     examples: [
-      "claudeusage refresh personal --dry-run",
-      'printf \'{"name":"personal","storage_state_json":{...}}\' | claudeusage refresh --input-file - --format json',
+      "gauge refresh personal --dry-run",
+      'printf \'{"name":"personal","storage_state_json":{...}}\' | gauge refresh --input-file - --format json',
     ],
     raw_payload: {
       accepts_json_option: true,
@@ -183,8 +183,8 @@ const COMMAND_SCHEMAS: CommandSchema[] = [
     kind: "mutating",
     summary: "Remove an account and all local auth artifacts.",
     examples: [
-      "claudeusage remove personal --dry-run",
-      'claudeusage remove --json \'{"name":"personal"}\' --format json',
+      "gauge remove personal --dry-run",
+      'gauge remove --json \'{"name":"personal"}\' --format json',
     ],
     raw_payload: {
       accepts_json_option: true,

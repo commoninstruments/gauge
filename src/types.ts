@@ -36,3 +36,20 @@ export interface AccountUsage {
   plan: Plan;
   usage: UsageResponse;
 }
+
+export type Provider = "claude" | "codex" | "cursor";
+
+export interface RateWindow {
+  usedPercent: number;
+  resetsAt: string;
+}
+
+export interface UnifiedAccount {
+  provider: Provider;
+  label: string;
+  email: string;
+  plan: string;
+  session: RateWindow | null;
+  weekly: RateWindow | null;
+  error?: string;
+}

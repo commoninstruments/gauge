@@ -1,15 +1,15 @@
 {
-  "name": "@howells/claudeusage",
-  "version": "1.0.1",
-  "description": "CLI to check Claude usage across multiple accounts",
+  "name": "@howells/gauge",
+  "version": "2.0.0",
+  "description": "At-a-glance usage dashboard for Claude, Codex, and Cursor accounts",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+ssh://git@github.com/howells/claudeusage.git"
+    "url": "git+ssh://git@github.com/howells/gauge.git"
   },
   "type": "module",
   "bin": {
-    "claudeusage": "./dist/cli.js"
+    "gauge": "./dist/cli.js"
   },
   "files": [
     "dist",

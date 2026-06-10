@@ -1,6 +1,6 @@
-# claudeusage Agent Guide
+# gauge Agent Guide
 
-Use `claudeusage describe --format json` before invoking the CLI programmatically.
+Use `gauge describe --format json` before invoking the CLI programmatically.
 
 ## Guardrails
 
@@ -10,22 +10,22 @@ Use `claudeusage describe --format json` before invoking the CLI programmaticall
 - Use `--fields` on every read command unless you explicitly need the full payload.
 - Use `--dry-run` on every mutating command before the real invocation.
 - Prefer `--json` or `--input-file -` for mutating commands so your payload maps directly to the command schema.
-- Prefer headless auth via `storage_state_file`, `storage_state_json`, `CLAUDEUSAGE_STORAGE_STATE_FILE`, or `CLAUDEUSAGE_STORAGE_STATE_JSON` in automation.
+- Prefer headless auth via `storage_state_file`, `storage_state_json`, `GAUGE_STORAGE_STATE_FILE`, or `GAUGE_STORAGE_STATE_JSON` in automation. Legacy `CLAUDEUSAGE_*` env vars are still accepted as fallbacks.
 - Keep `--output-file` paths inside the current working directory.
 - Structured output is sanitized by default. Only opt out with `--no-sanitize` if the downstream consumer is trusted.
 
 ## Recommended Sequence
 
-1. `claudeusage describe --format json`
-2. `claudeusage <read-command> --format json --fields ...`
-3. `claudeusage <mutating-command> --dry-run --format json`
-4. `claudeusage <mutating-command> --format json`
+1. `gauge describe --format json`
+2. `gauge <read-command> --format json --fields ...`
+3. `gauge <mutating-command> --dry-run --format json`
+4. `gauge <mutating-command> --format json`
 
 ## Preferred Commands
 
-- `claudeusage status`
-- `claudeusage list`
-- `claudeusage describe`
-- `claudeusage add`
-- `claudeusage refresh`
-- `claudeusage remove`
+- `gauge status`
+- `gauge list`
+- `gauge describe`
+- `gauge add`
+- `gauge refresh`
+- `gauge remove`

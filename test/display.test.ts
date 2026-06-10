@@ -7,17 +7,32 @@ import {
 import type { AccountUsage, UsageResponse } from "../src/types.js";
 
 function captureOutput(fn: () => void): string {
+  const original = process.stdout.write;
+  let output = "";
+  process.stdout.write = ((chunk: string | Uint8Array) => {
+    output += chunk.toString();
+    return true;
+  }) as typeof process.stdout.write;
+  try {
+    fn();
+  } finally {
+    process.stdout.write = original;
+  }
+  return output;
+}
+
+function captureLogOutput(fn: () => void): string {
   const original = console.log;
-  const logs: string[] = [];
+  let output = "";
   console.log = (...args: unknown[]) => {
-    logs.push(args.map(String).join(" "));
+    output += `${args.map(String).join(" ")}\n`;
   };
   try {
     fn();
   } finally {
     console.log = original;
   }
-  return logs.join("\n");
+  return output;
 }
 
 function stripAnsi(input: string): string {
@@ -40,7 +55,7 @@ function buildUsage(
   };
 }
 
-test("displayUsageTable shows card layout with metrics and status", () => {
+test("displayUsageTable shows dashboard with usage and status", () => {
   const now = new Date();
   const inThirtyMinutes = new Date(
     now.getTime() + 30 * 60 * 1000,
@@ -81,30 +96,15 @@ test("displayUsageTable shows card layout with metrics and status", () => {
 
   const output = stripAnsi(captureOutput(() => displayUsageTable(accounts)));
 
-  // Fleet summary header
   assert.match(output, /3 accounts/);
   assert.match(output, /1 available/);
-  assert.match(output, /avg load/);
-
-  // Account names appear
   assert.match(output, /ready/);
   assert.match(output, /session-blocked/);
   assert.match(output, /weekly-blocked/);
-
-  // Metric labels (new format)
-  assert.match(output, /5hr/);
-  assert.match(output, /Weekly/);
-
-  // Status badges
-  assert.match(output, /Use now/);
-  assert.match(output, /Wait/);
-
-  // Plan badges
+  assert.match(output, /60%/);
+  assert.match(output, /29m/);
+  assert.match(output, /1d 23h/);
   assert.match(output, /Max/);
-  assert.match(output, /Pro/);
-
-  // Recommendation footer
-  assert.match(output, /Best:/);
   assert.match(output, /ready/);
 });
 
@@ -163,11 +163,11 @@ test("displayUsageTable shows error accounts with error message", () => {
   const output = stripAnsi(captureOutput(() => displayUsageTable(accounts)));
 
   assert.match(output, /broken/);
-  assert.match(output, /Error/);
-  assert.match(output, /Session expired/);
+  assert.match(output, /✗/);
+  assert.match(output, /No accounts available/);
 });
 
-test("displayUsageTable shows all non-null metrics", () => {
+test("displayUsageTable shows blended session availability and earliest reset", () => {
   const now = new Date();
   const future = new Date(now.getTime() + 60 * 60 * 1000).toISOString();
 
@@ -191,13 +191,9 @@ test("displayUsageTable shows all non-null metrics", () => {
 
   const output = stripAnsi(captureOutput(() => displayUsageTable(accounts)));
 
-  assert.match(output, /5hr/);
-  assert.match(output, /Weekly/);
-  assert.match(output, /Sonnet/);
-  assert.match(output, /Opus/);
-  // Cowork and OAuth should NOT appear (they're null)
-  assert.doesNotMatch(output, /Cowork/);
-  assert.doesNotMatch(output, /OAuth/);
+  assert.match(output, /full-metrics/);
+  assert.match(output, /70%/);
+  assert.match(output, /59m|1h/);
 });
 
 test("displayQuickRecommendation prefers available accounts", () => {
@@ -232,10 +228,11 @@ test("displayQuickRecommendation prefers available accounts", () => {
   );
 
   assert.match(output, /available/);
-  assert.match(output, /Use now/);
+  assert.match(output, /available/);
+  assert.match(output, /Pro/);
 });
 
-test("displayUsageTable shows specific Max tier badges", () => {
+test("displayUsageTable shows selected specific Max tier in recommendation", () => {
   const now = new Date();
   const future = new Date(now.getTime() + 60 * 60 * 1000).toISOString();
 
@@ -263,5 +260,4 @@ test("displayUsageTable shows specific Max tier badges", () => {
   const output = stripAnsi(captureOutput(() => displayUsageTable(accounts)));
 
   assert.match(output, /Max 20x/);
-  assert.match(output, /Max 5x/);
 });

@@ -1,6 +1,6 @@
 {
   "name": "@howells/gauge",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "At-a-glance usage dashboard for Claude, Codex, and Cursor accounts",
   "license": "MIT",
   "repository": {
@@ -12,7 +12,7 @@
     "access": "public"
   },
   "bin": {
-    "gauge": "./dist/cli.js"
+    "gauge": "dist/cli.js"
   },
   "files": [
     "dist",

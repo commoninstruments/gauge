@@ -15,8 +15,8 @@ if (desiredShebang !== shebang) {
 }
 
 const content = fs.readFileSync(distPath, "utf-8");
-if (content.startsWith(shebang)) {
-  process.exit(0);
+if (!content.startsWith(shebang)) {
+  fs.writeFileSync(distPath, `${shebang}\n${content}`);
 }
 
-fs.writeFileSync(distPath, `${shebang}\n${content}`);
+fs.chmodSync(distPath, 0o755);

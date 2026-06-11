@@ -14,6 +14,17 @@ import type {
   UsageResponse,
 } from "./types.js";
 
+interface AccountRef {
+  authKey: string;
+  name: string;
+}
+
+function toAccountRef(account: string | AccountRef): AccountRef {
+  return typeof account === "string"
+    ? { authKey: account, name: account }
+    : account;
+}
+
 function derivePlan(org: Organization): Plan {
   const tier = org.rate_limit_tier ?? "";
   if (tier.includes("claude_max_20x")) {
@@ -35,6 +46,7 @@ function derivePlan(org: Organization): Plan {
 }
 
 const CLAUDE_URL = "https://claude.ai";
+const CURSOR_URL = "https://cursor.com";
 const LOGIN_URL_RE = /claude\.ai\/(new|recents|chat|settings)/;
 const LOGIN_TIMEOUT_MS = 300_000;
 const USER_AGENT =
@@ -43,10 +55,11 @@ const USER_AGENT =
 /** Open a Chrome browser for the user to log in and persist the session. */
 export async function addAccount(
   name: string,
-  options: { quiet?: boolean } = {},
+  options: { authKey?: string; quiet?: boolean } = {},
 ): Promise<boolean> {
   assertChromeInstalled();
-  const profileDir = getProfileDir(name);
+  const authKey = options.authKey ?? name;
+  const profileDir = getProfileDir(authKey);
   const quiet = options.quiet ?? false;
 
   // Use launchPersistentContext with a real Chrome executable
@@ -107,7 +120,59 @@ export async function addAccount(
     return false;
   }
 
-  const storagePath = getStorageStatePath(name);
+  const storagePath = getStorageStatePath(authKey);
+  await context.storageState({ path: storagePath });
+  lockFile(storagePath);
+
+  await context.close();
+  return true;
+}
+
+/** Open Chrome for Cursor login and persist the session as storage state. */
+export async function addCursorAccount(
+  name: string,
+  options: { authKey?: string; quiet?: boolean } = {},
+): Promise<boolean> {
+  assertChromeInstalled();
+  const authKey = options.authKey ?? name;
+  const profileDir = getProfileDir(authKey);
+  const quiet = options.quiet ?? false;
+
+  if (!quiet) {
+    console.log(`\nOpening browser for Cursor account "${name}"...`);
+    console.log(
+      "Please log in to Cursor. The browser will close automatically when done.\n",
+    );
+  }
+
+  const context = await chromium.launchPersistentContext(profileDir, {
+    headless: false,
+    channel: "chrome",
+    args: [
+      "--disable-blink-features=AutomationControlled",
+      "--no-first-run",
+      "--no-default-browser-check",
+      "--disable-extensions",
+    ],
+    viewport: { width: 1280, height: 800 },
+    locale: "en-US",
+    ignoreDefaultArgs: ["--enable-automation"],
+  });
+
+  const page = context.pages()[0] || (await context.newPage());
+  await page.goto(`${CURSOR_URL}/login`, { waitUntil: "domcontentloaded" });
+
+  const loginDetected = await waitForCursorLoginSignal(page, LOGIN_TIMEOUT_MS);
+  if (!loginDetected) {
+    if (!quiet) {
+      console.error("Cursor login timed out. Please try again.");
+    }
+    await context.close();
+    return false;
+  }
+
+  await page.waitForTimeout(1000);
+  const storagePath = getStorageStatePath(authKey);
   await context.storageState({ path: storagePath });
   lockFile(storagePath);
 
@@ -117,10 +182,11 @@ export async function addAccount(
 
 /** Fetch usage data for a single account, falling back to browser if the API request fails. */
 export async function fetchUsageForAccount(
-  name: string,
+  account: string | AccountRef,
 ): Promise<AccountUsage> {
-  const profileDir = getProfileDir(name);
-  const storagePath = getStorageStatePath(name);
+  const { authKey, name } = toAccountRef(account);
+  const profileDir = getProfileDir(authKey);
+  const storagePath = getStorageStatePath(authKey);
 
   if (!(fs.existsSync(profileDir) || fs.existsSync(storagePath))) {
     return {
@@ -210,17 +276,18 @@ export async function fetchUsageForAccount(
 
 /** Fetch usage data for multiple accounts sequentially. */
 export async function fetchAllUsage(
-  accountNames: string[],
+  accounts: Array<string | AccountRef>,
   options: { quiet?: boolean } = {},
 ): Promise<AccountUsage[]> {
   // Fetch sequentially - parallel would open too many browser windows
   const results: AccountUsage[] = [];
   const quiet = options.quiet ?? false;
-  for (const name of accountNames) {
+  for (const account of accounts) {
+    const accountRef = toAccountRef(account);
     if (!quiet) {
-      process.stdout.write(`  Checking ${name}...`);
+      process.stdout.write(`  Checking ${accountRef.name}...`);
     }
-    const usage = await fetchUsageForAccount(name);
+    const usage = await fetchUsageForAccount(accountRef);
     if (!quiet) {
       if (usage.error) {
         console.log(" error");
@@ -258,6 +325,37 @@ async function waitForLoginSignal(
       }
     } catch {
       // Ignore transient navigation errors while the user is logging in.
+    }
+
+    await page.waitForTimeout(2000);
+  }
+  return false;
+}
+
+async function waitForCursorLoginSignal(
+  page: Page,
+  timeoutMs: number,
+): Promise<boolean> {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    if (/cursor\.com/i.test(page.url())) {
+      try {
+        const ok = await page.evaluate(async () => {
+          try {
+            const res = await fetch("/api/auth/me", {
+              headers: { Accept: "application/json" },
+            });
+            if (!res.ok) return false;
+            const data = (await res.json()) as Record<string, unknown>;
+            return Boolean(data.email || data.name || data.sub || data.id);
+          } catch {
+            return false;
+          }
+        });
+        if (ok) return true;
+      } catch {
+        // Ignore transient navigation errors while the user is logging in.
+      }
     }
 
     await page.waitForTimeout(2000);

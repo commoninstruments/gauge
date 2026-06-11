@@ -10,7 +10,7 @@ version: 1
 
 - Prefer `storage_state_file` for larger payloads.
 - Use `storage_state_json` only for small inline payloads.
-- In automation, prefer `GAUGE_STORAGE_STATE_FILE` or `GAUGE_STORAGE_STATE_JSON`. Legacy `CLAUDEUSAGE_*` env vars are still accepted as fallbacks.
+- In automation, prefer `GAUGE_STORAGE_STATE_FILE` or `GAUGE_STORAGE_STATE_JSON`.
 - Validate first with `--dry-run`.
 
 ## Examples

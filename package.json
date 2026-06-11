@@ -8,11 +8,16 @@
     "url": "git+ssh://git@github.com/howells/gauge.git"
   },
   "type": "module",
+  "publishConfig": {
+    "access": "public"
+  },
   "bin": {
     "gauge": "./dist/cli.js"
   },
   "files": [
     "dist",
+    "AGENTS.md",
+    "skills",
     "README.md",
     "LICENSE",
     "package.json"
@@ -26,7 +31,7 @@
     "lint": "howells-lint",
     "format": "howells-format",
     "typecheck": "tsc --noEmit",
-    "prepare": "husky"
+    "prepare": "npm run build && (husky || true)"
   },
   "dependencies": {
     "chalk": "^5.3.0",

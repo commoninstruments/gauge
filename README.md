@@ -18,6 +18,8 @@ Agent-first CLI to check AI usage across multiple accounts.
 
 - Node.js 18+
 - Chrome installed for browser-based auth
+- Codex usage reads the Codex CLI auth file from `~/.codex/auth.json` or `$CODEX_HOME/auth.json`
+- Cursor usage needs a Cursor cookie or Playwright storage state provided through environment variables
 
 ## Install
 
@@ -37,7 +39,10 @@ gauge
 gauge --quick
 gauge list
 gauge add personal
+gauge add codex work --codex-home ~/.codex-work
+gauge add cursor work --storage-state-file ./cursor-state.json
 gauge refresh personal
+gauge refresh cursor work --storage-state-file ./cursor-state.json
 gauge remove personal --dry-run
 ```
 
@@ -66,6 +71,8 @@ Pass raw payloads directly:
 
 ```bash
 gauge add --json '{"name":"personal","storage_state_file":"./state.json"}' --format json
+gauge add --json '{"provider":"cursor","name":"work","storage_state_file":"./cursor-state.json"}' --format json
+gauge add --json '{"provider":"codex","name":"work","codex_home":"./codex-home"}' --format json
 gauge refresh --input-file payload.json --dry-run --format json
 ```
 
@@ -83,8 +90,7 @@ Import Playwright storage state without opening Chrome:
 gauge add --json '{"name":"personal","storage_state_file":"./state.json"}'
 ```
 
-You can also use environment variables. The old `CLAUDEUSAGE_*` names are
-still accepted as fallbacks for existing automation.
+You can also use environment variables.
 
 ```bash
 export GAUGE_STORAGE_STATE_FILE=./state.json
@@ -95,6 +101,36 @@ gauge add personal --format json
 export GAUGE_STORAGE_STATE_JSON='{"cookies":[],"origins":[]}'
 gauge refresh personal --dry-run --format json
 ```
+
+### Cursor Auth
+
+Cursor usage can be read from a named account with a Playwright storage state
+that contains `cursor.com` cookies:
+
+```bash
+gauge add cursor work --storage-state-file ./cursor-state.json
+gauge status --format json
+```
+
+For ambient, non-configured Cursor usage, you can also provide a cookie header
+or storage state through environment variables:
+
+```bash
+export GAUGE_CURSOR_COOKIE='WorkosCursorSessionToken=...'
+gauge status --format json
+```
+
+```bash
+export GAUGE_CURSOR_STORAGE_STATE_FILE=./cursor-state.json
+gauge status --format json
+```
+
+Supported environment variables:
+
+- `GAUGE_CURSOR_COOKIE`
+- `GAUGE_CURSOR_COOKIE_FILE`
+- `GAUGE_CURSOR_STORAGE_STATE_FILE`
+- `GAUGE_CURSOR_STORAGE_STATE_JSON`
 
 ## Safety Posture
 

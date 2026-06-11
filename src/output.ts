@@ -118,11 +118,18 @@ function assignPath(
   }
 
   if (Array.isArray(sourceValue)) {
-    target[segment] = sourceValue.map((item) => {
+    const existing = Array.isArray(target[segment])
+      ? (target[segment] as unknown[])
+      : [];
+    target[segment] = sourceValue.map((item, index) => {
       if (!item || typeof item !== "object") {
         return item;
       }
-      const nestedTarget: Record<string, unknown> = {};
+      const previous = existing[index];
+      const nestedTarget: Record<string, unknown> =
+        previous && typeof previous === "object" && !Array.isArray(previous)
+          ? { ...(previous as Record<string, unknown>) }
+          : {};
       assignPath(nestedTarget, item as Record<string, unknown>, rest);
       return nestedTarget;
     });

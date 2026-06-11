@@ -9,6 +9,7 @@ import type {
 
 // ─── ANSI-aware string helpers ────────────────────────────────────────────────
 
+// biome-ignore lint/suspicious/noControlCharactersInRegex: ANSI escape stripping needs ESC.
 const ANSI_RE = /\x1b\[[0-9;]*m/g;
 const visLen = (s: string): number => s.replace(ANSI_RE, "").length;
 const pad = (s: string, w: number): string =>
@@ -77,8 +78,10 @@ function pickAvailableWindow(
   return (
     candidates
       .filter((window) => window.resetsAt)
-      .sort((left, right) =>
-        new Date(left.resetsAt).getTime() - new Date(right.resetsAt).getTime(),
+      .sort(
+        (left, right) =>
+          new Date(left.resetsAt).getTime() -
+          new Date(right.resetsAt).getTime(),
       )[0] ?? null
   );
 }
@@ -87,8 +90,8 @@ function pickAvailableWindow(
 
 const INDENT = "   ";
 const COL_LABEL = 20;
-const COL_CELL = 15;
-const LINE_W = COL_LABEL + 2 + (COL_CELL + 2) * 3 - 2; // 54
+const COL_CELL = 28;
+const LINE_W = COL_LABEL + 2 + (COL_CELL + 2) * 3 - 2;
 
 const PROVIDER_NAME: Record<Provider, string> = {
   claude: "Claude",
@@ -99,34 +102,49 @@ const PROVIDER_NAME: Record<Provider, string> = {
 // ─── Grid cell ────────────────────────────────────────────────────────────────
 
 function gridCell(account: UnifiedAccount | null): string {
-  if (!account) return pad(chalk.dim("─"), COL_CELL);
+  if (!account) return pad(chalk.dim("not added"), COL_CELL);
 
   const status = getStatus(account);
-  if (status.kind === "error") return pad(chalk.red("✗"), COL_CELL);
-
-  if (status.kind === "available") {
-    const window = status.displayWindow;
-    const sessionAvailablePercent = account.session
-      ? Math.max(0, 100 - account.session.usedPercent)
-      : null;
-    const availableLabel =
-      sessionAvailablePercent === null ? "ok" : `${sessionAvailablePercent}%`;
-
-    if (window?.resetsAt) {
-      const wait = timeUntil(window.resetsAt);
-      return pad(
-        chalk.green("●") + chalk.dim(`  ${availableLabel} ${wait}`),
-        COL_CELL,
-      );
-    }
-
-    return pad(chalk.green("●") + chalk.dim(`  ${availableLabel}`), COL_CELL);
+  const meta = [account.plan, account.current ? chalk.cyan("current") : ""]
+    .filter(Boolean)
+    .join(" · ");
+  const planSuffix = meta
+    ? ` ${chalk.dim(`· ${trunc(meta, COL_CELL - 10)}`)}`
+    : "";
+  if (status.kind === "error") {
+    return pad(`${chalk.red("error")}${planSuffix}`, COL_CELL);
   }
 
-  const wait = timeUntil(
-    new Date(Date.now() + status.waitMs).toISOString(),
-  );
-  return pad(chalk.yellow("▲") + chalk.dim(`  ${wait}`), COL_CELL);
+  if (status.kind === "available") {
+    return pad(`${chalk.green("ready")}${planSuffix}`, COL_CELL);
+  }
+
+  return pad(`${chalk.yellow("blocked")}${planSuffix}`, COL_CELL);
+}
+
+function gridDetail(account: UnifiedAccount | null): string {
+  if (!account) return pad("", COL_CELL);
+
+  const status = getStatus(account);
+  if (status.kind === "error") return pad(chalk.dim("reauth needed"), COL_CELL);
+
+  if (status.kind === "waiting") {
+    const wait = timeUntil(new Date(Date.now() + status.waitMs).toISOString());
+    const label = account.renewsAt ? "renews" : "wait";
+    return pad(chalk.dim(`${label} ${wait}`), COL_CELL);
+  }
+
+  const window = status.displayWindow;
+  const usedLabel = account.session
+    ? `used ${Math.round(account.session.usedPercent)}%`
+    : "";
+  const resetLabel = account.renewsAt
+    ? `renews ${timeUntil(account.renewsAt)}`
+    : window?.resetsAt
+      ? `resets ${timeUntil(window.resetsAt)}`
+      : "";
+  const detail = [usedLabel, resetLabel].filter(Boolean).join(" · ");
+  return pad(chalk.dim(trunc(detail, COL_CELL)), COL_CELL);
 }
 
 // ─── Grid row ─────────────────────────────────────────────────────────────────
@@ -142,16 +160,17 @@ export interface GridRow {
 export function buildGrid(groups: ProviderGroups): GridRow[] {
   const map = new Map<string, GridRow>();
   const get = (label: string): GridRow => {
-    if (!map.has(label)) {
-      map.set(label, {
-        label,
-        claude: null,
-        codex: null,
-        cursor: null,
-        minWaitMs: Infinity,
-      });
-    }
-    return map.get(label)!;
+    const existing = map.get(label);
+    if (existing) return existing;
+    const row: GridRow = {
+      label,
+      claude: null,
+      codex: null,
+      cursor: null,
+      minWaitMs: Infinity,
+    };
+    map.set(label, row);
+    return row;
   };
 
   for (const a of groups.claude ?? []) get(a.label).claude = a;
@@ -171,11 +190,31 @@ export function buildGrid(groups: ProviderGroups): GridRow[] {
   });
 }
 
-function renderRow(row: GridRow, selected = false): string {
+function renderRow(row: GridRow, selected = false): string[] {
   const indent = selected ? ` ${chalk.cyan("›")} ` : INDENT;
-  const label = pad(chalk.white(trunc(row.label, COL_LABEL)), COL_LABEL);
-  const cells = [gridCell(row.claude), gridCell(row.codex), gridCell(row.cursor)];
-  return `${indent}${label}  ${cells.join("  ")}`;
+  const isCurrent = [row.claude, row.codex, row.cursor].some(
+    (account) => account?.current,
+  );
+  const labelText = trunc(row.label, COL_LABEL);
+  const label = pad(
+    isCurrent ? chalk.cyan.bold(labelText) : chalk.white(labelText),
+    COL_LABEL,
+  );
+  const cells = [
+    gridCell(row.claude),
+    gridCell(row.codex),
+    gridCell(row.cursor),
+  ];
+  const details = [
+    gridDetail(row.claude),
+    gridDetail(row.codex),
+    gridDetail(row.cursor),
+  ];
+  const detailIndent = `${INDENT}${" ".repeat(COL_LABEL)}`;
+  return [
+    `${indent}${label}  ${cells.join("  ")}`,
+    `${detailIndent}  ${details.join("  ")}`,
+  ];
 }
 
 // ─── Header / footer ──────────────────────────────────────────────────────────
@@ -191,9 +230,9 @@ function gridHeader(): string {
 function bestAccount(
   groups: ProviderGroups,
 ): { account: UnifiedAccount; status: AccountStatus } | null {
-  const all = (Object.values(groups).flat().filter(Boolean) as UnifiedAccount[]).filter(
-    (a) => !a.error,
-  );
+  const all = (
+    Object.values(groups).flat().filter(Boolean) as UnifiedAccount[]
+  ).filter((a) => !a.error);
   return (
     all
       .map((a) => ({ account: a, status: getStatus(a) }))
@@ -236,9 +275,7 @@ export function formatInteractiveDashboard(
   selectedIndex: number,
   statusMessage?: string | null,
 ): string {
-  const all = Object.values(groups)
-    .flat()
-    .filter(Boolean) as UnifiedAccount[];
+  const all = Object.values(groups).flat().filter(Boolean) as UnifiedAccount[];
   const totalAvailable = all.filter(
     (a) => getStatus(a).kind === "available",
   ).length;
@@ -251,7 +288,7 @@ export function formatInteractiveDashboard(
   lines.push(gridHeader());
   lines.push("");
   for (const [i, row] of rows.entries()) {
-    lines.push(renderRow(row, i === selectedIndex));
+    lines.push(...renderRow(row, i === selectedIndex));
   }
   lines.push("");
   lines.push(`${INDENT}${chalk.dim("─".repeat(LINE_W))}`);
@@ -261,9 +298,14 @@ export function formatInteractiveDashboard(
     lines.push("");
   } else {
     lines.push(recommendationLine(groups));
-    const canRefresh = rows[selectedIndex]?.claude?.error != null;
-    const hintParts = [chalk.dim("↑↓  j/k  navigate")];
-    if (canRefresh) hintParts.push(chalk.dim("r  re-auth"));
+    lines.push(
+      `${INDENT}${chalk.dim("current = active local CLI account   ·   ready = usable now   ·   blocked = limit hit")}`,
+    );
+    const selected = rows[selectedIndex];
+    const canRefresh =
+      selected?.claude?.error != null || selected?.cursor?.error != null;
+    const hintParts = [chalk.dim("↑↓  j/k  navigate"), chalk.dim("r  refresh")];
+    if (canRefresh) hintParts.push(chalk.dim("enter  re-auth"));
     hintParts.push(chalk.dim("q  quit"));
     lines.push(`${INDENT}${hintParts.join(chalk.dim("   ·   "))}`);
   }
@@ -286,10 +328,13 @@ export function formatDashboard(groups: ProviderGroups): string {
   lines.push("");
   lines.push(gridHeader());
   lines.push("");
-  for (const row of rows) lines.push(renderRow(row));
+  for (const row of rows) lines.push(...renderRow(row));
   lines.push("");
   lines.push(`${INDENT}${chalk.dim("─".repeat(LINE_W))}`);
   lines.push(recommendationLine(groups));
+  lines.push(
+    `${INDENT}${chalk.dim("current = active local CLI account   ·   ready = usable now   ·   blocked = limit hit")}`,
+  );
   lines.push("");
 
   return lines.join("\n");
@@ -327,7 +372,7 @@ export function claudeToUnified(account: AccountUsage): UnifiedAccount {
     max_20x: "Max 20x",
     unknown: "",
   };
-  return {
+  const unified: UnifiedAccount = {
     provider: "claude",
     label: account.name,
     email: account.name,
@@ -346,4 +391,9 @@ export function claudeToUnified(account: AccountUsage): UnifiedAccount {
       : null,
     error: account.error,
   };
+  Object.defineProperty(unified, "providerAccountId", {
+    enumerable: false,
+    value: account.orgUuid,
+  });
+  return unified;
 }

@@ -4,16 +4,10 @@ import path from "node:path";
 import { assertSafeIdentifier } from "./security.js";
 
 const DATA_DIR = path.join(os.homedir(), ".gauge");
-const LEGACY_DATA_DIR = path.join(os.homedir(), ".claudeusage");
 
 /** Return the ~/.gauge data directory path. */
 export function getDataDir(): string {
   return DATA_DIR;
-}
-
-/** Return the pre-rename ~/.claudeusage data directory path. */
-export function getLegacyDataDir(): string {
-  return LEGACY_DATA_DIR;
 }
 
 /** Create the data directory if it does not exist. */

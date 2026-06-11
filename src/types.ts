@@ -24,7 +24,9 @@ export interface Organization {
 
 export interface AccountConfig {
   addedAt: string;
+  codexHome?: string;
   name: string;
+  provider?: Provider;
 }
 
 export type Plan = "pro" | "max_5x" | "max_20x" | "max" | "unknown";
@@ -49,6 +51,9 @@ export interface UnifiedAccount {
   label: string;
   email: string;
   plan: string;
+  current?: boolean;
+  providerAccountId?: string;
+  renewsAt?: string | null;
   session: RateWindow | null;
   weekly: RateWindow | null;
   error?: string;

@@ -33,6 +33,34 @@ test("applyFieldMask keeps only requested nested fields", () => {
   });
 });
 
+test("applyFieldMask keeps multiple fields from array items", () => {
+  const masked = applyFieldMask(
+    {
+      accounts: [
+        {
+          label: "work",
+          provider: "cursor",
+          plan: "Cursor Enterprise",
+          renewsAt: "2026-06-21T16:31:30.000Z",
+          email: "hidden@example.com",
+        },
+      ],
+    },
+    "accounts.label,accounts.provider,accounts.plan,accounts.renewsAt",
+  );
+
+  assert.deepEqual(masked, {
+    accounts: [
+      {
+        label: "work",
+        provider: "cursor",
+        plan: "Cursor Enterprise",
+        renewsAt: "2026-06-21T16:31:30.000Z",
+      },
+    ],
+  });
+});
+
 test("paginateItems returns all pages for page-all reads", () => {
   const pages = paginateItems(
     [{ name: "a" }, { name: "b" }, { name: "c" }],

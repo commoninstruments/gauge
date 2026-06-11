@@ -118,9 +118,11 @@ const COMMAND_SCHEMAS: CommandSchema[] = [
     command: "add",
     kind: "mutating",
     summary:
-      "Add an account via browser auth or headless storage-state import.",
+      "Add an account via browser auth, Codex home, or headless storage-state import.",
     examples: [
       "gauge add personal --dry-run",
+      "gauge add codex work --codex-home ~/.codex-work --dry-run",
+      "gauge add cursor work --storage-state-file ./cursor-state.json --dry-run",
       'gauge add --json \'{"name":"personal","storage_state_file":"./state.json"}\' --format json',
     ],
     raw_payload: {
@@ -130,7 +132,9 @@ const COMMAND_SCHEMAS: CommandSchema[] = [
         type: "object",
         required: ["name"],
         properties: {
+          codex_home: { type: "string" },
           name: { type: "string" },
+          provider: { type: "string", enum: ["claude", "codex", "cursor"] },
           storage_state_json: { type: "string" },
           storage_state_file: { type: "string" },
         },
@@ -150,9 +154,10 @@ const COMMAND_SCHEMAS: CommandSchema[] = [
     command: "refresh",
     kind: "mutating",
     summary:
-      "Refresh an account session via browser auth or headless storage-state import.",
+      "Refresh an account session via browser auth, Codex home, or headless storage-state import.",
     examples: [
       "gauge refresh personal --dry-run",
+      "gauge refresh cursor work --storage-state-file ./cursor-state.json --dry-run",
       'printf \'{"name":"personal","storage_state_json":{...}}\' | gauge refresh --input-file - --format json',
     ],
     raw_payload: {
@@ -162,7 +167,9 @@ const COMMAND_SCHEMAS: CommandSchema[] = [
         type: "object",
         required: ["name"],
         properties: {
+          codex_home: { type: "string" },
           name: { type: "string" },
+          provider: { type: "string", enum: ["claude", "codex", "cursor"] },
           storage_state_json: { type: "string" },
           storage_state_file: { type: "string" },
         },
@@ -194,6 +201,7 @@ const COMMAND_SCHEMAS: CommandSchema[] = [
         required: ["name"],
         properties: {
           name: { type: "string" },
+          provider: { type: "string", enum: ["claude", "codex", "cursor"] },
         },
       },
     },

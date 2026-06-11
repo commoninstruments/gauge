@@ -3,8 +3,13 @@ import { test } from "node:test";
 import {
   displayQuickRecommendation,
   displayUsageTable,
+  formatDashboard,
 } from "../src/display.js";
-import type { AccountUsage, UsageResponse } from "../src/types.js";
+import type {
+  AccountUsage,
+  UnifiedAccount,
+  UsageResponse,
+} from "../src/types.js";
 
 function captureOutput(fn: () => void): string {
   const original = process.stdout.write;
@@ -17,20 +22,6 @@ function captureOutput(fn: () => void): string {
     fn();
   } finally {
     process.stdout.write = original;
-  }
-  return output;
-}
-
-function captureLogOutput(fn: () => void): string {
-  const original = console.log;
-  let output = "";
-  console.log = (...args: unknown[]) => {
-    output += `${args.map(String).join(" ")}\n`;
-  };
-  try {
-    fn();
-  } finally {
-    console.log = original;
   }
   return output;
 }
@@ -101,7 +92,10 @@ test("displayUsageTable shows dashboard with usage and status", () => {
   assert.match(output, /ready/);
   assert.match(output, /session-blocked/);
   assert.match(output, /weekly-blocked/);
-  assert.match(output, /60%/);
+  assert.match(output, /used 40%/);
+  assert.match(output, /resets/);
+  assert.match(output, /blocked/);
+  assert.match(output, /wait/);
   assert.match(output, /29m/);
   assert.match(output, /1d 23h/);
   assert.match(output, /Max/);
@@ -163,7 +157,7 @@ test("displayUsageTable shows error accounts with error message", () => {
   const output = stripAnsi(captureOutput(() => displayUsageTable(accounts)));
 
   assert.match(output, /broken/);
-  assert.match(output, /✗/);
+  assert.match(output, /error/);
   assert.match(output, /No accounts available/);
 });
 
@@ -192,7 +186,8 @@ test("displayUsageTable shows blended session availability and earliest reset", 
   const output = stripAnsi(captureOutput(() => displayUsageTable(accounts)));
 
   assert.match(output, /full-metrics/);
-  assert.match(output, /70%/);
+  assert.match(output, /used 30%/);
+  assert.match(output, /resets/);
   assert.match(output, /59m|1h/);
 });
 
@@ -260,4 +255,43 @@ test("displayUsageTable shows selected specific Max tier in recommendation", () 
   const output = stripAnsi(captureOutput(() => displayUsageTable(accounts)));
 
   assert.match(output, /Max 20x/);
+});
+
+test("formatDashboard shows provider plan and Cursor renewal separately", () => {
+  const future = new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString();
+  const cursor: UnifiedAccount = {
+    provider: "cursor",
+    label: "work",
+    email: "work@example.com",
+    plan: "Cursor Enterprise",
+    renewsAt: future,
+    session: { usedPercent: 80, resetsAt: future },
+    weekly: null,
+  };
+
+  const output = stripAnsi(formatDashboard({ cursor: [cursor] }));
+
+  assert.match(output, /ready · Cursor Enterprise/);
+  assert.match(output, /used 80%/);
+  assert.match(output, /renews/);
+  assert.doesNotMatch(output, /resets/);
+});
+
+test("formatDashboard highlights the current provider account", () => {
+  const future = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+  const account: UnifiedAccount = {
+    provider: "codex",
+    label: "work",
+    email: "work@example.com",
+    plan: "Pro 20x",
+    current: true,
+    session: { usedPercent: 10, resetsAt: future },
+    weekly: null,
+  };
+
+  const output = stripAnsi(formatDashboard({ codex: [account] }));
+
+  assert.match(output, /work/);
+  assert.match(output, /ready · Pro 20x · current/);
+  assert.match(output, /current = active local CLI account/);
 });

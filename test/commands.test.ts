@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { __test } from "../src/commands.js";
+import { __test, runAddCommand } from "../src/commands.js";
 import type { AccountUsage, UsageResponse } from "../src/types.js";
 
 function buildUsage(
@@ -59,4 +59,41 @@ test("pickRecommendation returns weekly window when session has not started", ()
   assert.equal(recommendation.account?.name, "siteinspire");
   assert.equal(recommendation.account_window?.basis, "available_weekly");
   assert.match(recommendation.account_window?.label ?? "", /2d/);
+});
+
+test("runAddCommand dry-runs provider-scoped Cursor accounts", async () => {
+  const result = await runAddCommand("work", {
+    dryRun: true,
+    provider: "cursor",
+    storageStateFile: "./cursor-state.json",
+  });
+
+  assert.equal(result.dryRun, true);
+  assert.equal(result.data.provider, "cursor");
+  assert.equal(result.data.auth_mode, "headless-storage-state");
+  assert.match(JSON.stringify(result.data.writes), /cursor-work/);
+});
+
+test("runAddCommand dry-runs provider-scoped Codex accounts", async () => {
+  const result = await runAddCommand("work", {
+    codexHome: "/tmp/codex-work",
+    dryRun: true,
+    provider: "codex",
+  });
+
+  assert.equal(result.dryRun, true);
+  assert.equal(result.data.provider, "codex");
+  assert.equal(result.data.auth_mode, "codex-home");
+  assert.match(JSON.stringify(result.data.writes), /codex-work/);
+});
+
+test("runAddCommand rejects unsupported providers", async () => {
+  await assert.rejects(
+    () =>
+      runAddCommand("work", {
+        dryRun: true,
+        provider: "unknown",
+      }),
+    /Unsupported provider/,
+  );
 });

@@ -1,36 +1,54 @@
 import process from "node:process";
 import readline from "node:readline";
-import { addAccount, fetchAllUsage } from "./api.js";
-import { listAccountDetails } from "./accounts.js";
-import { fetchCodexAccounts, fetchCursorAccounts } from "./codexbar.js";
 import chalk from "chalk";
+import { listAccountDetails } from "./accounts.js";
+import { addAccount, addCursorAccount, fetchAllUsage } from "./api.js";
+import { markCurrentAccounts } from "./current-account.js";
 import {
-  type GridRow,
-  type ProviderGroups,
   buildGrid,
   claudeToUnified,
   formatInteractiveDashboard,
+  type GridRow,
+  type ProviderGroups,
 } from "./display.js";
+import { fetchCodexAccounts, fetchCursorAccounts } from "./provider-usage.js";
 
 const INDENT = "   ";
 
 async function fetchAllGroups(): Promise<ProviderGroups> {
-  const codex = fetchCodexAccounts();
-  const cursor = fetchCursorAccounts();
-  const claudeConfigs = listAccountDetails();
+  const allConfigs = listAccountDetails();
+  const codexConfigs = allConfigs.filter(
+    (account) => account.provider === "codex",
+  );
+  const cursorConfigs = allConfigs.filter(
+    (account) => account.provider === "cursor",
+  );
+  const [codex, cursor] = await Promise.all([
+    fetchCodexAccounts(codexConfigs),
+    fetchCursorAccounts(cursorConfigs),
+  ]);
+  const claudeConfigs = allConfigs.filter(
+    (account) => account.provider === "claude",
+  );
   const claudeRaw =
     claudeConfigs.length > 0
       ? await fetchAllUsage(
-          claudeConfigs.map((a) => a.name),
+          claudeConfigs.map((account) => ({
+            authKey: account.authKey,
+            name: account.name,
+          })),
           { quiet: true },
         )
       : [];
   const claude = claudeRaw.map(claudeToUnified);
-  return {
-    ...(claude.length > 0 && { claude }),
-    ...(codex.length > 0 && { codex }),
-    ...(cursor.length > 0 && { cursor }),
-  };
+  return markCurrentAccounts(
+    {
+      ...(claude.length > 0 && { claude }),
+      ...(codex.length > 0 && { codex }),
+      ...(cursor.length > 0 && { cursor }),
+    },
+    allConfigs,
+  );
 }
 
 export async function runTUI(): Promise<void> {
@@ -60,6 +78,24 @@ export async function runTUI(): Promise<void> {
     writeLines(
       formatInteractiveDashboard(groups, rows, selectedIndex, statusMessage),
     );
+  }
+
+  async function reloadValues(message = "Refreshing..."): Promise<void> {
+    const selectedLabel = rows[selectedIndex]?.label;
+    statusMessage = message;
+    redraw();
+    groups = await fetchAllGroups();
+    rows = buildGrid(groups);
+    selectedIndex = Math.max(
+      0,
+      selectedLabel
+        ? rows.findIndex((row) => row.label === selectedLabel)
+        : selectedIndex,
+    );
+    if (selectedIndex < 0) selectedIndex = 0;
+    selectedIndex = Math.min(selectedIndex, Math.max(0, rows.length - 1));
+    statusMessage = null;
+    redraw();
   }
 
   redraw();
@@ -94,9 +130,16 @@ export async function runTUI(): Promise<void> {
       return;
     }
 
-    if (key.name === "r" || key.name === "return") {
+    if (key.name === "r") {
+      isProcessing = true;
+      await reloadValues();
+      isProcessing = false;
+      return;
+    }
+
+    if (key.name === "return") {
       const row = rows[selectedIndex];
-      if (row?.claude?.error != null) {
+      if (row?.claude?.error != null || row?.cursor?.error != null) {
         isProcessing = true;
         await doRefresh(row);
         isProcessing = false;
@@ -108,20 +151,28 @@ export async function runTUI(): Promise<void> {
 
   async function doRefresh(row: GridRow): Promise<void> {
     process.stdin.setRawMode(false);
-    statusMessage = `Opening browser for ${row.label} — log in and close the tab...`;
+    const provider = row.claude?.error ? "claude" : "cursor";
+    statusMessage = `Opening browser for ${provider}:${row.label} — log in and close the tab...`;
     redraw();
 
-    const ok = await addAccount(row.label, { quiet: true });
+    const account = listAccountDetails(provider).find(
+      (item) => item.name === row.label,
+    );
+    const ok =
+      provider === "claude"
+        ? await addAccount(row.label, {
+            authKey: account?.authKey,
+            quiet: true,
+          })
+        : await addCursorAccount(row.label, {
+            authKey: account?.authKey,
+            quiet: true,
+          });
 
     if (ok) {
-      statusMessage = "Reloading...";
-      redraw();
-      groups = await fetchAllGroups();
-      rows = buildGrid(groups);
-      selectedIndex = Math.min(selectedIndex, rows.length - 1);
-      statusMessage = null;
+      await reloadValues("Reloading...");
     } else {
-      statusMessage = `✗ Re-auth failed for ${row.label}  ·  r to retry`;
+      statusMessage = `Re-auth failed for ${row.label}  ·  enter to retry`;
     }
 
     process.stdin.setRawMode(true);

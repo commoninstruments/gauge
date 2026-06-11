@@ -7,21 +7,21 @@ import {
   removeAccount,
   saveAccount,
 } from "./accounts.js";
-import { addAccount, fetchAllUsage } from "./api.js";
-import { fetchCodexAccounts, fetchCursorAccounts } from "./codexbar.js";
-import {
-  claudeToUnified,
-  formatDashboard,
-} from "./display.js";
-import type { UnifiedAccount } from "./types.js";
+import { addAccount, addCursorAccount, fetchAllUsage } from "./api.js";
+import { markCurrentAccounts } from "./current-account.js";
+import { claudeToUnified, formatDashboard } from "./display.js";
 import type { CommandResult, OutputOptions } from "./output.js";
+import { fetchCodexAccounts, fetchCursorAccounts } from "./provider-usage.js";
 import { describeCommands } from "./schema.js";
 import { CLIError } from "./security.js";
+import type { Provider, UnifiedAccount } from "./types.js";
 
 interface CommandOptions extends OutputOptions {
+  codexHome?: string;
   dryRun?: boolean;
   inputFile?: string;
   json?: string;
+  provider?: string;
   quick?: boolean;
   quiet?: boolean;
   storageStateFile?: string;
@@ -29,7 +29,9 @@ interface CommandOptions extends OutputOptions {
 }
 
 interface MutationPayload {
+  codex_home?: string;
   name: string;
+  provider?: string;
   storage_state_file?: string;
   storage_state_json?: string;
 }
@@ -52,35 +54,47 @@ export async function runStatusCommand(
 ): Promise<CommandResult> {
   const quiet = options.quiet ?? false;
 
-  // Codex + Cursor via codexbar (fast, synchronous)
+  // Codex + Cursor use local provider auth, independent of Claude browser state.
   if (!quiet) process.stdout.write("  Fetching codex...\n");
-  const codexAccounts = fetchCodexAccounts();
+  const allConfigs = listAccountDetails();
+  const codexConfigs = allConfigs.filter(
+    (account) => account.provider === "codex",
+  );
+  const cursorConfigs = allConfigs.filter(
+    (account) => account.provider === "cursor",
+  );
+
+  const codexAccounts = await fetchCodexAccounts(codexConfigs);
 
   if (!quiet) process.stdout.write("  Fetching cursor...\n");
-  const cursorAccounts = fetchCursorAccounts();
+  const cursorAccounts = await fetchCursorAccounts(cursorConfigs);
 
   // Claude via Playwright (sequential per account)
-  const claudeConfigs = listAccountDetails();
+  const claudeConfigs = allConfigs.filter(
+    (account) => account.provider === "claude",
+  );
   const claudeRaw =
     claudeConfigs.length > 0
       ? await fetchAllUsage(
-          claudeConfigs.map((a) => a.name),
+          claudeConfigs.map((account) => ({
+            authKey: account.authKey,
+            name: account.name,
+          })),
           { quiet },
         )
       : [];
   const claudeAccounts = claudeRaw.map(claudeToUnified);
 
-  const groups = {
-    ...(claudeAccounts.length > 0 && { claude: claudeAccounts }),
-    ...(codexAccounts.length > 0 && { codex: codexAccounts }),
-    ...(cursorAccounts.length > 0 && { cursor: cursorAccounts }),
-  };
+  const groups = markCurrentAccounts(
+    {
+      ...(claudeAccounts.length > 0 && { claude: claudeAccounts }),
+      ...(codexAccounts.length > 0 && { codex: codexAccounts }),
+      ...(cursorAccounts.length > 0 && { cursor: cursorAccounts }),
+    },
+    allConfigs,
+  );
 
-  const allAccounts = [
-    ...claudeAccounts,
-    ...codexAccounts,
-    ...cursorAccounts,
-  ];
+  const allAccounts = Object.values(groups).flat().filter(Boolean);
   const statusAccounts = allAccounts.map(addStatusNameAlias);
   const statusGroups = mapStatusGroups(groups);
   const recommendation =
@@ -112,7 +126,7 @@ export function runListCommand(): CommandResult {
     accounts.length === 0
       ? "\nNo accounts configured.\nAdd one with: gauge add <name>\n"
       : `\nConfigured accounts:\n${accounts
-          .map((account) => `  • ${account.name}`)
+          .map((account) => `  • ${account.provider}:${account.name}`)
           .join("\n")}\n`;
 
   return {
@@ -154,7 +168,8 @@ export async function runAddCommand(
   options: CommandOptions,
 ): Promise<CommandResult> {
   const payload = resolveMutationPayload(name, options);
-  if (accountExists(payload.name)) {
+  const provider = resolveProvider(payload.provider);
+  if (accountExists(payload.name, provider)) {
     throw new CLIError(`Account "${payload.name}" already exists.`, {
       code: "ACCOUNT_EXISTS",
       exitCode: 2,
@@ -163,38 +178,89 @@ export async function runAddCommand(
   }
 
   const storageStateMode = resolveStorageStateMode(payload, options);
-  const artifacts = getAccountArtifacts(payload.name);
+  const artifacts = getAccountArtifacts(payload.name, provider);
   if (options.dryRun) {
     return {
       command: "add",
       data: {
         action: "add",
         name: payload.name,
-        auth_mode: storageStateMode ? "headless-storage-state" : "browser",
+        provider,
+        auth_mode: resolveAuthMode(provider, storageStateMode),
         writes: [
           artifacts.accountPath,
           ...(storageStateMode ? [artifacts.storagePath] : []),
         ],
       },
       dryRun: true,
-      human: `Dry run: would add "${payload.name}" via ${
-        storageStateMode ? "headless storage-state import" : "browser auth"
-      }.\n`,
+      human: `Dry run: would add "${payload.name}" via ${resolveAuthMode(
+        provider,
+        storageStateMode,
+      )}.\n`,
     };
   }
 
-  if (storageStateMode) {
-    saveAccount(payload.name);
-    importStorageState(payload.name, storageStateMode);
+  if (provider === "codex") {
+    const codexHome = payload.codex_home ?? options.codexHome;
+    if (!codexHome) {
+      throw new CLIError("Codex accounts require codex_home.", {
+        code: "CODEX_HOME_REQUIRED",
+        exitCode: 2,
+        details: { hint: "Use --codex-home /path/to/codex-home" },
+      });
+    }
+    saveAccount(payload.name, { codexHome, provider });
     return {
       command: "add",
       data: {
         action: "add",
         name: payload.name,
+        provider,
+        auth_mode: "codex-home",
+        account_saved: true,
+      },
+      human: `Account "${payload.name}" added from Codex home.\n`,
+    };
+  }
+
+  if (storageStateMode) {
+    saveAccount(payload.name, { provider });
+    importStorageState(payload.name, storageStateMode, provider);
+    return {
+      command: "add",
+      data: {
+        action: "add",
+        name: payload.name,
+        provider,
         auth_mode: "headless-storage-state",
         account_saved: true,
       },
       human: `Account "${payload.name}" added from storage state.\n`,
+    };
+  }
+
+  if (provider === "cursor") {
+    const success = await addCursorAccount(payload.name, {
+      authKey: artifacts.authKey,
+      quiet: options.quiet,
+    });
+    if (!success) {
+      throw new CLIError(`Failed to add Cursor account "${payload.name}".`, {
+        code: "ADD_FAILED",
+        exitCode: 1,
+      });
+    }
+    saveAccount(payload.name, { provider });
+    return {
+      command: "add",
+      data: {
+        action: "add",
+        name: payload.name,
+        provider,
+        auth_mode: "browser",
+        account_saved: true,
+      },
+      human: `✓ Account "${payload.name}" added successfully.\n`,
     };
   }
 
@@ -206,12 +272,13 @@ export async function runAddCommand(
     });
   }
 
-  saveAccount(payload.name);
+  saveAccount(payload.name, { provider });
   return {
     command: "add",
     data: {
       action: "add",
       name: payload.name,
+      provider,
       auth_mode: "browser",
       account_saved: true,
     },
@@ -225,7 +292,8 @@ export async function runRefreshCommand(
   options: CommandOptions,
 ): Promise<CommandResult> {
   const payload = resolveMutationPayload(name, options);
-  if (!accountExists(payload.name)) {
+  const provider = resolveProvider(payload.provider);
+  if (!accountExists(payload.name, provider)) {
     throw new CLIError(`Account "${payload.name}" not found.`, {
       code: "ACCOUNT_NOT_FOUND",
       exitCode: 2,
@@ -234,34 +302,84 @@ export async function runRefreshCommand(
   }
 
   const storageStateMode = resolveStorageStateMode(payload, options);
-  const artifacts = getAccountArtifacts(payload.name);
+  const artifacts = getAccountArtifacts(payload.name, provider);
   if (options.dryRun) {
     return {
       command: "refresh",
       data: {
         action: "refresh",
         name: payload.name,
-        auth_mode: storageStateMode ? "headless-storage-state" : "browser",
+        provider,
+        auth_mode: resolveAuthMode(provider, storageStateMode),
         writes: [artifacts.storagePath],
       },
       dryRun: true,
-      human: `Dry run: would refresh "${payload.name}" via ${
-        storageStateMode ? "headless storage-state import" : "browser auth"
-      }.\n`,
+      human: `Dry run: would refresh "${payload.name}" via ${resolveAuthMode(
+        provider,
+        storageStateMode,
+      )}.\n`,
     };
   }
 
-  if (storageStateMode) {
-    importStorageState(payload.name, storageStateMode);
+  if (provider === "codex") {
+    const codexHome = payload.codex_home ?? options.codexHome;
+    if (codexHome) {
+      saveAccount(payload.name, { codexHome, provider });
+    }
     return {
       command: "refresh",
       data: {
         action: "refresh",
         name: payload.name,
+        provider,
+        auth_mode: "codex-home",
+        session_refreshed: true,
+      },
+      human: codexHome
+        ? `Account "${payload.name}" Codex home updated.\n`
+        : `Account "${payload.name}" uses Codex home auth.\n`,
+    };
+  }
+
+  if (storageStateMode) {
+    importStorageState(payload.name, storageStateMode, provider);
+    return {
+      command: "refresh",
+      data: {
+        action: "refresh",
+        name: payload.name,
+        provider,
         auth_mode: "headless-storage-state",
         session_refreshed: true,
       },
       human: `Account "${payload.name}" refreshed from storage state.\n`,
+    };
+  }
+
+  if (provider === "cursor") {
+    const success = await addCursorAccount(payload.name, {
+      authKey: artifacts.authKey,
+      quiet: options.quiet,
+    });
+    if (!success) {
+      throw new CLIError(
+        `Failed to refresh Cursor account "${payload.name}".`,
+        {
+          code: "REFRESH_FAILED",
+          exitCode: 1,
+        },
+      );
+    }
+    return {
+      command: "refresh",
+      data: {
+        action: "refresh",
+        name: payload.name,
+        provider,
+        auth_mode: "browser",
+        session_refreshed: true,
+      },
+      human: `✓ Account "${payload.name}" refreshed successfully.\n`,
     };
   }
 
@@ -278,6 +396,7 @@ export async function runRefreshCommand(
     data: {
       action: "refresh",
       name: payload.name,
+      provider,
       auth_mode: "browser",
       session_refreshed: true,
     },
@@ -291,20 +410,22 @@ export function runRemoveCommand(
   options: CommandOptions,
 ): CommandResult {
   const payload = resolveMutationPayload(name, options);
-  if (!accountExists(payload.name)) {
+  const provider = resolveProvider(payload.provider);
+  if (!accountExists(payload.name, provider)) {
     throw new CLIError(`Account "${payload.name}" not found.`, {
       code: "ACCOUNT_NOT_FOUND",
       exitCode: 2,
     });
   }
 
-  const artifacts = getAccountArtifacts(payload.name);
+  const artifacts = getAccountArtifacts(payload.name, provider);
   if (options.dryRun) {
     return {
       command: "remove",
       data: {
         action: "remove",
         name: payload.name,
+        provider,
         deletes: [
           artifacts.accountPath,
           artifacts.storagePath,
@@ -316,7 +437,7 @@ export function runRemoveCommand(
     };
   }
 
-  if (!removeAccount(payload.name)) {
+  if (!removeAccount(payload.name, provider)) {
     throw new CLIError(`Account "${payload.name}" not found.`, {
       code: "ACCOUNT_NOT_FOUND",
       exitCode: 2,
@@ -328,6 +449,7 @@ export function runRemoveCommand(
     data: {
       action: "remove",
       name: payload.name,
+      provider,
       removed: true,
     },
     human: `✓ Account "${payload.name}" removed.\n`,
@@ -340,7 +462,9 @@ function resolveMutationPayload(
 ): MutationPayload {
   const rawPayload = loadRawPayload(options);
   return {
+    codex_home: rawPayload?.codex_home ?? options.codexHome,
     name: rawPayload?.name ?? name ?? "",
+    provider: rawPayload?.provider ?? options.provider,
     storage_state_file:
       rawPayload?.storage_state_file ?? options.storageStateFile,
     storage_state_json:
@@ -348,6 +472,27 @@ function resolveMutationPayload(
         rawPayload?.storage_state_json ?? options.storageStateJson,
       ) ?? getStorageStateJsonEnv(),
   };
+}
+
+function resolveProvider(raw: string | undefined): Provider {
+  const provider = raw ?? "claude";
+  if (provider === "claude" || provider === "codex" || provider === "cursor") {
+    return provider;
+  }
+  throw new CLIError(`Unsupported provider "${provider}".`, {
+    code: "UNSUPPORTED_PROVIDER",
+    exitCode: 2,
+    details: { supported: ["claude", "codex", "cursor"] },
+  });
+}
+
+function resolveAuthMode(
+  provider: Provider,
+  storageStateMode: { filePath?: string; json?: string } | null,
+): string {
+  if (provider === "codex") return "codex-home";
+  if (storageStateMode) return "headless-storage-state";
+  return "browser";
 }
 
 function loadRawPayload(options: CommandOptions): MutationPayload | null {
@@ -395,17 +540,11 @@ function resolveStorageStateMode(
 }
 
 function getStorageStateFileEnv(): string | undefined {
-  return (
-    process.env.GAUGE_STORAGE_STATE_FILE ??
-    process.env.CLAUDEUSAGE_STORAGE_STATE_FILE
-  );
+  return process.env.GAUGE_STORAGE_STATE_FILE;
 }
 
 function getStorageStateJsonEnv(): string | undefined {
-  return (
-    process.env.GAUGE_STORAGE_STATE_JSON ??
-    process.env.CLAUDEUSAGE_STORAGE_STATE_JSON
-  );
+  return process.env.GAUGE_STORAGE_STATE_JSON;
 }
 
 function normalizeStorageStateJson(value: unknown): string | undefined {
@@ -487,8 +626,9 @@ function addStatusNameAlias(account: UnifiedAccount): UnifiedAccount & {
 function mapStatusGroups(
   groups: Partial<Record<string, UnifiedAccount[]>>,
 ): Partial<Record<string, Array<UnifiedAccount & { name: string }>>> {
-  const result: Partial<Record<string, Array<UnifiedAccount & { name: string }>>> =
-    {};
+  const result: Partial<
+    Record<string, Array<UnifiedAccount & { name: string }>>
+  > = {};
   for (const [provider, accounts] of Object.entries(groups)) {
     if (!accounts) continue;
     result[provider] = accounts.map(addStatusNameAlias);

@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { createRequire } from "node:module";
 import process from "node:process";
 import { Command, CommanderError, Option } from "commander";
 import {
@@ -10,7 +11,6 @@ import {
   runRemoveCommand,
   runStatusCommand,
 } from "./commands.js";
-import { runTUI } from "./tui.js";
 import { migrateIfNeeded } from "./migrate.js";
 import {
   type OutputOptions,
@@ -19,6 +19,11 @@ import {
   resolveOutputFormat,
 } from "./output.js";
 import { CLIError } from "./security.js";
+import { runTUI } from "./tui.js";
+import type { Provider } from "./types.js";
+
+const require = createRequire(import.meta.url);
+const packageJson = require("../package.json") as { version?: string };
 
 const argv = process.argv.slice(2);
 const requestedFormat = detectRequestedFormat(argv);
@@ -34,7 +39,7 @@ program
   .description(
     "At-a-glance usage dashboard for Claude, Codex, and Cursor accounts",
   )
-  .version("1.0.1")
+  .version(packageJson.version ?? "0.0.0")
   .showHelpAfterError(false)
   .exitOverride()
   .configureOutput({
@@ -127,15 +132,18 @@ addReadOptions(
 
 addMutationOptions(
   program
-    .command("add [name]")
-    .description("Add a new Claude account")
+    .command("add [providerOrName] [name]")
+    .description("Add a new account")
     // Human hint preserved in source for packaging tests: gauge add <name>
     .action(async (...args) => {
-      const name = typeof args[0] === "string" ? args[0] : undefined;
+      const first = typeof args[0] === "string" ? args[0] : undefined;
+      const second = typeof args[1] === "string" ? args[1] : undefined;
       const options = getOptionsFromActionArgs(args);
+      const target = resolveAccountTarget(first, second, options.provider);
       await emitResult(
-        await runAddCommand(name, {
+        await runAddCommand(target.name, {
           ...options,
+          provider: target.provider,
           quiet:
             resolveOutputFormat(options.format ?? requestedFormat, isTTY) !==
             "human",
@@ -147,14 +155,17 @@ addMutationOptions(
 
 addMutationOptions(
   program
-    .command("refresh [name]")
+    .command("refresh [providerOrName] [name]")
     .description("Re-authenticate an account")
     .action(async (...args) => {
-      const name = typeof args[0] === "string" ? args[0] : undefined;
+      const first = typeof args[0] === "string" ? args[0] : undefined;
+      const second = typeof args[1] === "string" ? args[1] : undefined;
       const options = getOptionsFromActionArgs(args);
+      const target = resolveAccountTarget(first, second, options.provider);
       await emitResult(
-        await runRefreshCommand(name, {
+        await runRefreshCommand(target.name, {
           ...options,
+          provider: target.provider,
           quiet:
             resolveOutputFormat(options.format ?? requestedFormat, isTTY) !==
             "human",
@@ -166,12 +177,20 @@ addMutationOptions(
 
 addMutationOptions(
   program
-    .command("remove [name]")
-    .description("Remove a Claude account")
+    .command("remove [providerOrName] [name]")
+    .description("Remove an account")
     .action(async (...args) => {
-      const name = typeof args[0] === "string" ? args[0] : undefined;
+      const first = typeof args[0] === "string" ? args[0] : undefined;
+      const second = typeof args[1] === "string" ? args[1] : undefined;
       const options = getOptionsFromActionArgs(args);
-      await emitResult(runRemoveCommand(name, options), options);
+      const target = resolveAccountTarget(first, second, options.provider);
+      await emitResult(
+        runRemoveCommand(target.name, {
+          ...options,
+          provider: target.provider,
+        }),
+        options,
+      );
     }),
 );
 
@@ -245,7 +264,9 @@ function addMutationOptions<T extends Command>(command: T): T {
     .option(
       "--storage-state-json <payload>",
       "Inline Playwright storage-state JSON instead of browser auth",
-    );
+    )
+    .option("--provider <provider>", "Account provider: claude, codex, cursor")
+    .option("--codex-home <path>", "Codex home containing auth.json");
 }
 
 function formatOption(): Option {
@@ -365,6 +386,32 @@ function getOptionsFromActionArgs(
   return (last as OutputOptions & Record<string, unknown>) ?? {};
 }
 
+function resolveAccountTarget(
+  first: string | undefined,
+  second: string | undefined,
+  providerOption: unknown,
+): { name: string | undefined; provider?: Provider } {
+  if (typeof providerOption === "string") {
+    return {
+      name: second ?? first,
+      provider: providerOption as Provider,
+    };
+  }
+
+  if (second && isProvider(first)) {
+    return {
+      name: second,
+      provider: first,
+    };
+  }
+
+  return { name: first };
+}
+
+function isProvider(value: string | undefined): value is Provider {
+  return value === "claude" || value === "codex" || value === "cursor";
+}
+
 function normalizeOutputOptions(options: OutputOptions): OutputOptions {
   return {
     ...options,
@@ -378,7 +425,7 @@ function normalizeOutputOptions(options: OutputOptions): OutputOptions {
       parseOptionalInteger(peekFlagValue(argv, "--page-size")),
     sanitize: argv.includes("--no-sanitize")
       ? false
-      : options.sanitize ?? true,
+      : (options.sanitize ?? true),
   };
 }
 

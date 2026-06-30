@@ -122,6 +122,7 @@ const COMMAND_SCHEMAS: CommandSchema[] = [
     examples: [
       "gauge add personal --dry-run",
       "gauge add codex work --codex-home ~/.codex-work --dry-run",
+      "gauge add codex work --codex-home ~/.codex-work --renews-at 2026-07-12 --dry-run",
       "gauge add cursor work --storage-state-file ./cursor-state.json --dry-run",
       'gauge add --json \'{"name":"personal","storage_state_file":"./state.json"}\' --format json',
     ],
@@ -135,6 +136,11 @@ const COMMAND_SCHEMAS: CommandSchema[] = [
           codex_home: { type: "string" },
           name: { type: "string" },
           provider: { type: "string", enum: ["claude", "codex", "cursor"] },
+          renews_at: {
+            type: ["string", "null"],
+            description:
+              "Manual subscription renewal timestamp. Use null or 'none' to clear.",
+          },
           storage_state_json: { type: "string" },
           storage_state_file: { type: "string" },
         },
@@ -157,6 +163,7 @@ const COMMAND_SCHEMAS: CommandSchema[] = [
       "Refresh an account session via browser auth, Codex home, or headless storage-state import.",
     examples: [
       "gauge refresh personal --dry-run",
+      "gauge refresh codex work --renews-at 2026-07-12 --dry-run",
       "gauge refresh cursor work --storage-state-file ./cursor-state.json --dry-run",
       'printf \'{"name":"personal","storage_state_json":{...}}\' | gauge refresh --input-file - --format json',
     ],
@@ -170,6 +177,11 @@ const COMMAND_SCHEMAS: CommandSchema[] = [
           codex_home: { type: "string" },
           name: { type: "string" },
           provider: { type: "string", enum: ["claude", "codex", "cursor"] },
+          renews_at: {
+            type: ["string", "null"],
+            description:
+              "Manual subscription renewal timestamp. Use null or 'none' to clear.",
+          },
           storage_state_json: { type: "string" },
           storage_state_file: { type: "string" },
         },

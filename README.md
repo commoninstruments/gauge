@@ -41,6 +41,7 @@ gauge list
 gauge add personal
 gauge add codex work --codex-home ~/.codex-work
 gauge add cursor work --storage-state-file ./cursor-state.json
+gauge refresh codex work --renews-at 2026-07-12 --dry-run
 gauge refresh personal
 gauge refresh cursor work --storage-state-file ./cursor-state.json
 gauge remove personal --dry-run
@@ -73,6 +74,7 @@ Pass raw payloads directly:
 gauge add --json '{"name":"personal","storage_state_file":"./state.json"}' --format json
 gauge add --json '{"provider":"cursor","name":"work","storage_state_file":"./cursor-state.json"}' --format json
 gauge add --json '{"provider":"codex","name":"work","codex_home":"./codex-home"}' --format json
+gauge refresh --json '{"provider":"codex","name":"work","renews_at":"2026-07-12"}' --dry-run --format json
 gauge refresh --input-file payload.json --dry-run --format json
 ```
 
@@ -131,6 +133,24 @@ Supported environment variables:
 - `GAUGE_CURSOR_COOKIE_FILE`
 - `GAUGE_CURSOR_STORAGE_STATE_FILE`
 - `GAUGE_CURSOR_STORAGE_STATE_JSON`
+
+## Subscription Renewals
+
+Gauge reads Claude renewal dates from Claude's authenticated subscription
+details endpoint when it is available. Cursor renewal dates come from Cursor's
+usage summary. Codex's CLI token currently exposes usage but not ChatGPT billing,
+so store a manual renewal date when needed:
+
+```bash
+gauge refresh codex work --renews-at 2026-07-12 --dry-run --format json
+gauge refresh codex work --renews-at 2026-07-12 --format json
+```
+
+Clear a manual renewal date with:
+
+```bash
+gauge refresh codex work --renews-at none --format json
+```
 
 ## Safety Posture
 

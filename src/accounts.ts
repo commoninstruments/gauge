@@ -58,18 +58,35 @@ export function accountExists(name: string, provider?: Provider): boolean {
 /** Persist a new account config to the data directory. */
 export function saveAccount(
   name: string,
-  options: { codexHome?: string; provider?: Provider } = {},
+  options: {
+    codexHome?: string;
+    provider?: Provider;
+    renewsAt?: string | null;
+  } = {},
 ): void {
   ensureDataDir();
-  const config: AccountConfig = {
-    ...(options.codexHome !== undefined && { codexHome: options.codexHome }),
-    name,
-    provider: normalizeProvider(options.provider),
-    addedAt: new Date().toISOString(),
-  };
   const accountPath = getAccountPath(accountKey(name, options.provider));
+  const existing = readAccountIfExists(accountPath);
+  const config: AccountConfig = {
+    ...existing,
+    ...(options.codexHome !== undefined && { codexHome: options.codexHome }),
+    ...(options.renewsAt !== undefined &&
+      options.renewsAt !== null && { renewsAt: options.renewsAt }),
+    name,
+    provider: normalizeProvider(options.provider ?? existing?.provider),
+    addedAt: existing?.addedAt ?? new Date().toISOString(),
+  };
+  if (options.renewsAt === null) {
+    delete config.renewsAt;
+  }
   fs.writeFileSync(accountPath, JSON.stringify(config, null, 2));
   lockFile(accountPath);
+}
+
+function readAccountIfExists(accountPath: string): AccountConfig | null {
+  if (!fs.existsSync(accountPath)) return null;
+  const content = fs.readFileSync(accountPath, "utf-8");
+  return JSON.parse(content) as AccountConfig;
 }
 
 /** Import a Playwright storage-state from JSON string or file path. */

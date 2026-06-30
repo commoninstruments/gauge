@@ -377,6 +377,7 @@ export function claudeToUnified(account: AccountUsage): UnifiedAccount {
     label: account.name,
     email: account.name,
     plan: planLabel[account.plan] ?? "",
+    renewsAt: account.renewsAt,
     session: account.usage.five_hour
       ? {
           usedPercent: account.usage.five_hour.utilization,

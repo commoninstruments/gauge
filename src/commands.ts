@@ -24,6 +24,7 @@ interface CommandOptions extends OutputOptions {
   provider?: string;
   quick?: boolean;
   quiet?: boolean;
+  renewsAt?: string;
   storageStateFile?: string;
   storageStateJson?: string;
 }
@@ -32,6 +33,7 @@ interface MutationPayload {
   codex_home?: string;
   name: string;
   provider?: string;
+  renews_at?: string | null;
   storage_state_file?: string;
   storage_state_json?: string;
 }
@@ -79,6 +81,7 @@ export async function runStatusCommand(
           claudeConfigs.map((account) => ({
             authKey: account.authKey,
             name: account.name,
+            renewsAt: account.renewsAt,
           })),
           { quiet },
         )
@@ -187,6 +190,9 @@ export async function runAddCommand(
         name: payload.name,
         provider,
         auth_mode: resolveAuthMode(provider, storageStateMode),
+        ...(payload.renews_at !== undefined && {
+          renews_at: payload.renews_at,
+        }),
         writes: [
           artifacts.accountPath,
           ...(storageStateMode ? [artifacts.storagePath] : []),
@@ -209,7 +215,11 @@ export async function runAddCommand(
         details: { hint: "Use --codex-home /path/to/codex-home" },
       });
     }
-    saveAccount(payload.name, { codexHome, provider });
+    saveAccount(payload.name, {
+      codexHome,
+      provider,
+      renewsAt: payload.renews_at,
+    });
     return {
       command: "add",
       data: {
@@ -224,7 +234,7 @@ export async function runAddCommand(
   }
 
   if (storageStateMode) {
-    saveAccount(payload.name, { provider });
+    saveAccount(payload.name, { provider, renewsAt: payload.renews_at });
     importStorageState(payload.name, storageStateMode, provider);
     return {
       command: "add",
@@ -250,7 +260,7 @@ export async function runAddCommand(
         exitCode: 1,
       });
     }
-    saveAccount(payload.name, { provider });
+    saveAccount(payload.name, { provider, renewsAt: payload.renews_at });
     return {
       command: "add",
       data: {
@@ -272,7 +282,7 @@ export async function runAddCommand(
     });
   }
 
-  saveAccount(payload.name, { provider });
+  saveAccount(payload.name, { provider, renewsAt: payload.renews_at });
   return {
     command: "add",
     data: {
@@ -303,6 +313,7 @@ export async function runRefreshCommand(
 
   const storageStateMode = resolveStorageStateMode(payload, options);
   const artifacts = getAccountArtifacts(payload.name, provider);
+  const writes = refreshWrites(provider, payload, options, artifacts);
   if (options.dryRun) {
     return {
       command: "refresh",
@@ -311,7 +322,10 @@ export async function runRefreshCommand(
         name: payload.name,
         provider,
         auth_mode: resolveAuthMode(provider, storageStateMode),
-        writes: [artifacts.storagePath],
+        ...(payload.renews_at !== undefined && {
+          renews_at: payload.renews_at,
+        }),
+        writes,
       },
       dryRun: true,
       human: `Dry run: would refresh "${payload.name}" via ${resolveAuthMode(
@@ -323,8 +337,12 @@ export async function runRefreshCommand(
 
   if (provider === "codex") {
     const codexHome = payload.codex_home ?? options.codexHome;
-    if (codexHome) {
-      saveAccount(payload.name, { codexHome, provider });
+    if (codexHome || payload.renews_at !== undefined) {
+      saveAccount(payload.name, {
+        ...(codexHome !== undefined && { codexHome }),
+        provider,
+        renewsAt: payload.renews_at,
+      });
     }
     return {
       command: "refresh",
@@ -343,6 +361,9 @@ export async function runRefreshCommand(
 
   if (storageStateMode) {
     importStorageState(payload.name, storageStateMode, provider);
+    if (payload.renews_at !== undefined) {
+      saveAccount(payload.name, { provider, renewsAt: payload.renews_at });
+    }
     return {
       command: "refresh",
       data: {
@@ -370,6 +391,9 @@ export async function runRefreshCommand(
         },
       );
     }
+    if (payload.renews_at !== undefined) {
+      saveAccount(payload.name, { provider, renewsAt: payload.renews_at });
+    }
     return {
       command: "refresh",
       data: {
@@ -389,6 +413,9 @@ export async function runRefreshCommand(
       code: "REFRESH_FAILED",
       exitCode: 1,
     });
+  }
+  if (payload.renews_at !== undefined) {
+    saveAccount(payload.name, { provider, renewsAt: payload.renews_at });
   }
 
   return {
@@ -465,6 +492,11 @@ function resolveMutationPayload(
     codex_home: rawPayload?.codex_home ?? options.codexHome,
     name: rawPayload?.name ?? name ?? "",
     provider: rawPayload?.provider ?? options.provider,
+    renews_at: normalizeRenewalInput(
+      rawPayload && Object.hasOwn(rawPayload, "renews_at")
+        ? rawPayload.renews_at
+        : options.renewsAt,
+    ),
     storage_state_file:
       rawPayload?.storage_state_file ?? options.storageStateFile,
     storage_state_json:
@@ -472,6 +504,28 @@ function resolveMutationPayload(
         rawPayload?.storage_state_json ?? options.storageStateJson,
       ) ?? getStorageStateJsonEnv(),
   };
+}
+
+function normalizeRenewalInput(value: unknown): string | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  if (typeof value !== "string") {
+    throw new CLIError("renews_at must be a date string or null.", {
+      code: "INVALID_RENEWAL",
+      exitCode: 2,
+    });
+  }
+  const trimmed = value.trim();
+  if (!trimmed || trimmed === "none" || trimmed === "null") return null;
+  const timestamp = Date.parse(trimmed);
+  if (!Number.isFinite(timestamp)) {
+    throw new CLIError(`Invalid renews_at timestamp "${value}".`, {
+      code: "INVALID_RENEWAL",
+      exitCode: 2,
+      details: { expected: "ISO timestamp or YYYY-MM-DD" },
+    });
+  }
+  return new Date(timestamp).toISOString();
 }
 
 function resolveProvider(raw: string | undefined): Provider {
@@ -537,6 +591,26 @@ function resolveStorageStateMode(
   }
 
   return { filePath, json };
+}
+
+function refreshWrites(
+  provider: Provider,
+  payload: MutationPayload,
+  options: CommandOptions,
+  artifacts: ReturnType<typeof getAccountArtifacts>,
+): string[] {
+  if (provider === "codex") {
+    const changesConfig =
+      payload.renews_at !== undefined ||
+      payload.codex_home !== undefined ||
+      options.codexHome !== undefined;
+    return changesConfig ? [artifacts.accountPath] : [];
+  }
+
+  return [
+    artifacts.storagePath,
+    ...(payload.renews_at !== undefined ? [artifacts.accountPath] : []),
+  ];
 }
 
 function getStorageStateFileEnv(): string | undefined {
@@ -728,5 +802,7 @@ function formatDuration(milliseconds: number): string {
 
 export const __test = {
   getRecommendationWindow,
+  normalizeRenewalInput,
   pickRecommendation,
+  refreshWrites,
 };

@@ -14,6 +14,7 @@ interface CodexSource {
   email?: string;
   homePath: string;
   label?: string;
+  renewsAt?: string | null;
 }
 
 interface CodexCredentials {
@@ -27,6 +28,7 @@ interface CodexCredentials {
 interface CursorSession {
   cookieHeader: string;
   label: string;
+  renewsAt?: string | null;
 }
 
 function home(...parts: string[]): string {
@@ -157,6 +159,7 @@ function codexSourcesFromAccounts(accounts: AccountDetails[]): CodexSource[] {
     .map((account) => ({
       homePath: account.codexHome ?? "",
       label: account.name,
+      renewsAt: account.renewsAt,
     }));
 }
 
@@ -319,6 +322,7 @@ async function fetchCodexAccount(source: CodexSource): Promise<UnifiedAccount> {
     label,
     email,
     plan: formatCodexPlan(usage.plan_type),
+    renewsAt: source.renewsAt,
     session,
     weekly,
   };
@@ -381,6 +385,7 @@ function cursorSessionsFromAccounts(
     sessions.push({
       cookieHeader: parseCookieFile(storagePath) ?? "",
       label: account.name,
+      renewsAt: account.renewsAt,
     });
   }
   return sessions;
@@ -532,7 +537,7 @@ async function fetchCursorAccount(
     label: email ? labelFromEmail(email) : session.label,
     email,
     plan: formatCursorPlan(usage.membershipType),
-    renewsAt: end,
+    renewsAt: end ?? session.renewsAt,
     session: end
       ? {
           usedPercent: cursorUsagePercent(usage),

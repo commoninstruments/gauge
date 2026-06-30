@@ -27,6 +27,7 @@ export interface AccountConfig {
   codexHome?: string;
   name: string;
   provider?: Provider;
+  renewsAt?: string;
 }
 
 export type Plan = "pro" | "max_5x" | "max_20x" | "max" | "unknown";
@@ -36,6 +37,7 @@ export interface AccountUsage {
   name: string;
   orgUuid: string;
   plan: Plan;
+  renewsAt?: string | null;
   usage: UsageResponse;
 }
 

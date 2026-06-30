@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  claudeToUnified,
   displayQuickRecommendation,
   displayUsageTable,
   formatDashboard,
@@ -275,6 +276,24 @@ test("formatDashboard shows provider plan and Cursor renewal separately", () => 
   assert.match(output, /used 80%/);
   assert.match(output, /renews/);
   assert.doesNotMatch(output, /resets/);
+});
+
+test("claudeToUnified carries subscription renewal", () => {
+  const future = new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString();
+  const account: AccountUsage = {
+    name: "personal",
+    plan: "max_20x",
+    renewsAt: future,
+    orgUuid: "org-1",
+    usage: buildUsage(
+      { utilization: 10, resets_at: future },
+      { utilization: 20, resets_at: future },
+    ),
+  };
+
+  const unified = claudeToUnified(account);
+
+  assert.equal(unified.renewsAt, future);
 });
 
 test("formatDashboard highlights the current provider account", () => {

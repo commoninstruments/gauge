@@ -25,7 +25,13 @@ import type { Provider } from "./types.js";
 const require = createRequire(import.meta.url);
 const packageJson = require("../package.json") as { version?: string };
 
-const argv = process.argv.slice(2);
+const rawArgv = process.argv.slice(2);
+const argv = rawArgv[0] === "--" ? rawArgv.slice(1) : rawArgv;
+const parseArgv = [
+  process.argv[0] ?? "node",
+  process.argv[1] ?? "gauge",
+  ...argv,
+];
 const requestedFormat = detectRequestedFormat(argv);
 const isTTY = process.stdout.isTTY ?? false;
 const resolvedFormat =
@@ -195,7 +201,7 @@ addMutationOptions(
 );
 
 try {
-  await program.parseAsync(process.argv);
+  await program.parseAsync(parseArgv);
 } catch (error) {
   if (error instanceof CommanderError && isBenignCommanderExit(error)) {
     process.exit(error.exitCode);
@@ -266,6 +272,10 @@ function addMutationOptions<T extends Command>(command: T): T {
       "Inline Playwright storage-state JSON instead of browser auth",
     )
     .option("--provider <provider>", "Account provider: claude, codex, cursor")
+    .option(
+      "--renews-at <timestamp>",
+      "Manual subscription renewal timestamp, or 'none' to clear",
+    )
     .option("--codex-home <path>", "Codex home containing auth.json");
 }
 

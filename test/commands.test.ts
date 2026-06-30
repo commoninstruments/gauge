@@ -79,12 +79,41 @@ test("runAddCommand dry-runs provider-scoped Codex accounts", async () => {
     codexHome: "/tmp/codex-work",
     dryRun: true,
     provider: "codex",
+    renewsAt: "2026-07-12",
   });
 
   assert.equal(result.dryRun, true);
   assert.equal(result.data.provider, "codex");
   assert.equal(result.data.auth_mode, "codex-home");
+  assert.equal(result.data.renews_at, "2026-07-12T00:00:00.000Z");
   assert.match(JSON.stringify(result.data.writes), /codex-work/);
+});
+
+test("refresh dry-run reports Codex renewal config writes", () => {
+  const writes = __test.refreshWrites(
+    "codex",
+    { name: "work", provider: "codex", renews_at: "2026-07-12T00:00:00.000Z" },
+    {},
+    {
+      accountPath: "/tmp/codex-work.json",
+      authKey: "codex-work",
+      profileDir: "/tmp/profile-codex-work",
+      storagePath: "/tmp/codex-work-storage.json",
+    },
+  );
+
+  assert.deepEqual(writes, ["/tmp/codex-work.json"]);
+});
+
+test("manual renewal accepts null clearing values", () => {
+  assert.equal(__test.normalizeRenewalInput("none"), null);
+  assert.equal(__test.normalizeRenewalInput(null), null);
+});
+
+test("manual renewal rejects invalid timestamps", () => {
+  assert.throws(() => __test.normalizeRenewalInput("not-a-date"), {
+    message: /Invalid renews_at/,
+  });
 });
 
 test("runAddCommand rejects unsupported providers", async () => {

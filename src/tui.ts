@@ -36,6 +36,7 @@ async function fetchAllGroups(): Promise<ProviderGroups> {
           claudeConfigs.map((account) => ({
             authKey: account.authKey,
             name: account.name,
+            renewsAt: account.renewsAt,
           })),
           { quiet: true },
         )

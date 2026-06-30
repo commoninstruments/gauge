@@ -17,6 +17,7 @@ import type {
 interface AccountRef {
   authKey: string;
   name: string;
+  renewsAt?: string | null;
 }
 
 function toAccountRef(account: string | AccountRef): AccountRef {
@@ -184,7 +185,7 @@ export async function addCursorAccount(
 export async function fetchUsageForAccount(
   account: string | AccountRef,
 ): Promise<AccountUsage> {
-  const { authKey, name } = toAccountRef(account);
+  const { authKey, name, renewsAt } = toAccountRef(account);
   const profileDir = getProfileDir(authKey);
   const storagePath = getStorageStatePath(authKey);
 
@@ -192,13 +193,14 @@ export async function fetchUsageForAccount(
     return {
       name,
       plan: "unknown",
+      renewsAt,
       orgUuid: "",
       usage: {} as UsageResponse,
       error: `No saved session. Run: gauge add ${name}`,
     };
   }
 
-  const requestResult = await fetchUsageViaRequest(name, storagePath);
+  const requestResult = await fetchUsageViaRequest(name, storagePath, renewsAt);
   if (requestResult) {
     return requestResult;
   }
@@ -244,6 +246,7 @@ export async function fetchUsageForAccount(
     const plan = derivePlan(org);
 
     const usageResponse = await fetchUsageFromPage(page, org.uuid);
+    const fetchedRenewsAt = await fetchRenewalFromPage(page, org.uuid);
 
     await context.storageState({ path: storagePath });
     lockFile(storagePath);
@@ -253,6 +256,7 @@ export async function fetchUsageForAccount(
     return {
       name,
       plan,
+      renewsAt: fetchedRenewsAt ?? renewsAt,
       orgUuid: org.uuid,
       usage: usageResponse as UsageResponse,
     };
@@ -261,12 +265,13 @@ export async function fetchUsageForAccount(
     const message = error instanceof Error ? error.message : String(error);
 
     if (message.includes("401") || message.includes("403")) {
-      return expiredError(name);
+      return expiredError(name, renewsAt);
     }
 
     return {
       name,
       plan: "unknown",
+      renewsAt,
       orgUuid: "",
       usage: {} as UsageResponse,
       error: message,
@@ -397,10 +402,44 @@ async function fetchUsageFromPage(
   return usageResponse as UsageResponse;
 }
 
-function expiredError(name: string): AccountUsage {
+async function fetchRenewalFromPage(
+  page: Page,
+  uuid: string,
+): Promise<string | null> {
+  try {
+    const subscriptionDetails = await page.evaluate(async (orgUuid: string) => {
+      const res = await fetch(
+        `https://claude.ai/api/organizations/${encodeURIComponent(orgUuid)}/subscription_details?cached=false`,
+      );
+      if (!res.ok) return null;
+      return res.json();
+    }, uuid);
+    return extractClaudeRenewal(subscriptionDetails);
+  } catch {
+    return null;
+  }
+}
+
+function extractClaudeRenewal(value: unknown): string | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  return (
+    normalizeDate(record.next_charge_at) ??
+    normalizeDate(record.next_charge_date)
+  );
+}
+
+function normalizeDate(value: unknown): string | null {
+  if (typeof value !== "string" || value.length === 0) return null;
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : null;
+}
+
+function expiredError(name: string, renewsAt?: string | null): AccountUsage {
   return {
     name,
     plan: "unknown",
+    renewsAt,
     orgUuid: "",
     usage: {} as UsageResponse,
     error: `Session expired. Run: gauge refresh ${name}`,
@@ -410,13 +449,16 @@ function expiredError(name: string): AccountUsage {
 function checkResponse(
   name: string,
   res: APIResponse,
+  renewsAt?: string | null,
 ): AccountUsage | null | "ok" {
   if (res.status() === 401) {
-    return expiredError(name);
+    return expiredError(name, renewsAt);
   }
   if (res.status() === 403) {
     const contentType = res.headers()["content-type"] ?? "";
-    return contentType.includes("text/html") ? null : expiredError(name);
+    return contentType.includes("text/html")
+      ? null
+      : expiredError(name, renewsAt);
   }
   return res.ok() ? "ok" : null;
 }
@@ -424,6 +466,7 @@ function checkResponse(
 async function fetchUsageViaRequest(
   name: string,
   storagePath: string,
+  renewsAt?: string | null,
 ): Promise<AccountUsage | null> {
   if (!fs.existsSync(storagePath)) {
     return null;
@@ -440,7 +483,7 @@ async function fetchUsageViaRequest(
 
   try {
     const orgsRes = await api.get("/api/organizations");
-    const orgsCheck = checkResponse(name, orgsRes);
+    const orgsCheck = checkResponse(name, orgsRes, renewsAt);
     if (orgsCheck !== "ok") {
       return orgsCheck;
     }
@@ -451,6 +494,7 @@ async function fetchUsageViaRequest(
       return {
         name,
         plan: "unknown",
+        renewsAt,
         orgUuid: "",
         usage: {} as UsageResponse,
         error: "No organizations found",
@@ -462,12 +506,13 @@ async function fetchUsageViaRequest(
     const usageRes = await api.get(
       `/api/organizations/${encodeURIComponent(org.uuid)}/usage`,
     );
-    const usageCheck = checkResponse(name, usageRes);
+    const usageCheck = checkResponse(name, usageRes, renewsAt);
     if (usageCheck !== "ok") {
       return usageCheck;
     }
 
     const usage = (await usageRes.json()) as UsageResponse;
+    const fetchedRenewsAt = await fetchRenewalViaRequest(api, org.uuid);
 
     await api.storageState({ path: storagePath });
     lockFile(storagePath);
@@ -475,16 +520,34 @@ async function fetchUsageViaRequest(
     return {
       name,
       plan,
+      renewsAt: fetchedRenewsAt ?? renewsAt,
       orgUuid: org.uuid,
       usage,
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     if (message.includes("401")) {
-      return expiredError(name);
+      return expiredError(name, renewsAt);
     }
     return null;
   } finally {
     await api.dispose();
+  }
+}
+
+async function fetchRenewalViaRequest(
+  api: Awaited<ReturnType<typeof request.newContext>>,
+  uuid: string,
+): Promise<string | null> {
+  try {
+    const res = await api.get(
+      `/api/organizations/${encodeURIComponent(uuid)}/subscription_details?cached=false`,
+    );
+    if (!res.ok()) return null;
+    const contentType = res.headers()["content-type"] ?? "";
+    if (!contentType.includes("application/json")) return null;
+    return extractClaudeRenewal(await res.json());
+  } catch {
+    return null;
   }
 }
